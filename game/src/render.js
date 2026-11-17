@@ -253,6 +253,20 @@ export class Renderer {
     for (const l of game.city.lamps) ctx.fillRect(l.x - 2, l.y - 2, 4, 4);
     ctx.fillStyle = '#c0392b';
     for (const h of game.city.hydrants) ctx.fillRect(h.x - 3, h.y - 3, 6, 6);
+    // Stunt ramps: chevron boards across the road.
+    for (const ramp of game.stunts.ramps) {
+      if (!overlaps(view, ramp.x - 30, ramp.y - 30, 60, 60)) continue;
+      ctx.save();
+      ctx.translate(ramp.x, ramp.y);
+      ctx.rotate(ramp.angle);
+      ctx.fillStyle = '#f2c230';
+      for (let i = -1; i <= 1; i++) {
+        ctx.fillRect(-14 + i * 12, -16, 6, 32);
+      }
+      ctx.fillStyle = '#22222a';
+      ctx.fillRect(-16, -18, 32, 4);
+      ctx.restore();
+    }
   }
 
   drawStashes(ctx, game) {
@@ -332,6 +346,9 @@ export class Renderer {
     for (const ped of game.crowd.peds) {
       this.drawPerson(ctx, ped.x, ped.y, ped.angle, ped.color, ped.skin, ped.state === 'down');
     }
+    for (const member of game.gangs.members) {
+      this.drawPerson(ctx, member.x, member.y, member.angle, member.color, member.skin, member.state === 'down');
+    }
     for (const cop of game.cops) {
       this.drawPerson(ctx, cop.x, cop.y, cop.angle, '#20242e', '#f0c8a0', cop.state === 'down', true);
     }
@@ -389,8 +406,9 @@ export class Renderer {
   }
 
   drawCar(ctx, car, game) {
+    const lift = car.airHeight || 0;
     ctx.save();
-    ctx.translate(car.x, car.y);
+    ctx.translate(car.x, car.y - lift);
     ctx.rotate(car.angle);
     if (car.skid > 0) {
       ctx.fillStyle = 'rgba(20,20,20,0.5)';
@@ -465,10 +483,19 @@ export class Renderer {
       ctx.fill();
     }
     ctx.restore();
+    // An airborne car leaves its shadow on the ground below.
+    if (lift > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(car.x, car.y, 24, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     // The player's car gets a gold outline.
     if (car === game.playerCar) {
       ctx.save();
-      ctx.translate(car.x, car.y);
+      ctx.translate(car.x, car.y - lift);
       ctx.rotate(car.angle);
       ctx.strokeStyle = 'rgba(255,210,63,0.9)';
       ctx.lineWidth = 2;

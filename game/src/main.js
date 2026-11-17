@@ -15,6 +15,8 @@ import { HUD } from './hud.js';
 import { Input } from './input.js';
 import { SoundBank } from './audio.js';
 import { applyShot } from './shots.js';
+import { StuntRamps } from './stunts.js';
+import { Gangs } from './gangs.js';
 import { seeded } from './rng.js';
 
 export class Game {
@@ -26,6 +28,8 @@ export class Game {
     this.traffic = new Traffic(this.city);
     this.crowd = new Crowd(this.city);
     this.missions = new MissionManager(this);
+    this.stunts = new StuntRamps();
+    this.gangs = new Gangs(this.city);
     this.renderer = new Renderer(this.canvas, document.getElementById('minimap'));
     this.hud = new HUD();
     this.input = new Input(this.canvas);
@@ -67,6 +71,7 @@ export class Game {
     this.traffic.spawnParked(14);
     this.traffic.spawn(10, spawn.x, spawn.y);
     this.crowd.spawn(24, spawn.x, spawn.y);
+    this.gangs.spawn(4, spawn.x, spawn.y);
   }
 
   // A save file restores missions done and money in pocket.
@@ -473,6 +478,7 @@ export class Game {
     // The world ticks on.
     this.traffic.update(dt, this);
     this.crowd.update(dt, this);
+    this.gangs.update(dt, this, this.rng);
     this.updateCops(dt);
     this.spawnPolice(dt);
     this.updateWanted(dt);
@@ -506,6 +512,7 @@ export class Game {
     if (input.down.KeyD || input.down.ArrowRight) steer = 1;
     const handbrake = !!input.down.Space;
     car.drive(throttle, steer, handbrake, dt);
+    this.stunts.update(dt, car, this);
     this.sounds.setEngine(Math.abs(car.speed) / car.topSpeed, true);
     if (car.skid > 0 && Math.random() < 0.5) {
       this.particles.push({
@@ -562,6 +569,7 @@ export class Game {
     const trafficNear = this.traffic.cars.filter((c) => c.driver === 'traffic' && !c.dead).length;
     if (trafficNear < 12) this.traffic.spawn(4, px, py);
     if (this.crowd.peds.length < 22) this.crowd.spawn(6, px, py);
+    if (this.gangs.members.length < 4) this.gangs.spawn(2, px, py);
     // One pistol pickup near the pawnshop, waiting to be found.
     if (!this.pistolSpawned && p.weapon !== 'pistol') {
       this.pistolSpawned = true;

@@ -248,6 +248,17 @@ export class Player {
         landed = true;
       }
     }
+    for (const member of game.gangs.members) {
+      if (member.state === 'down') continue;
+      if (distSq(fx, fy, member.x, member.y) < 30 * 30) {
+        member.knockDown();
+        game.addCrime(1, `You dropped a ${member.crew.name}! Their crew saw that.`);
+        game.addParticles(member.x, member.y, 8, '#ffd23f');
+        game.addCash(30, member.x, member.y);
+        game.gangs.scatterNear(member.x, member.y, 200);
+        landed = true;
+      }
+    }
     return landed;
   }
 
@@ -273,6 +284,9 @@ export class Player {
     }
     for (const cop of game.cops) {
       if (cop.state !== 'down') consider(cop.x, cop.y, cop.r, { kind: 'cop', cop });
+    }
+    for (const member of game.gangs.members) {
+      if (member.state !== 'down') consider(member.x, member.y, member.r, { kind: 'gang', member });
     }
     for (const car of game.traffic.cars) {
       if (!car.dead) consider(car.x, car.y, 24, { kind: 'car', car });
@@ -302,6 +316,12 @@ export class Player {
         hit.cop.knockDown();
         game.addCrime(2, 'You shot a cop! Wanted level way up.');
         game.addParticles(hit.cop.x, hit.cop.y, 10, '#e33f2f');
+      } else if (hit.kind === 'gang') {
+        hit.member.knockDown();
+        game.addCrime(1, `You shot a ${hit.member.crew.name}! Their crew saw that.`);
+        game.addParticles(hit.member.x, hit.member.y, 10, '#e33f2f');
+        game.addCash(30, hit.member.x, hit.member.y);
+        game.gangs.scatterNear(hit.member.x, hit.member.y, 200);
       } else {
         hit.car.damage(34, game);
         game.addCrime(1, 'You shot at a car!');
