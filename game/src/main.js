@@ -400,50 +400,37 @@ export class Game {
 
   // ---------- main loop ----------
 
+  // The frame loop: menus wait for a key, the game ticks while playing.
   loop(now) {
     requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (now - this.lastT) / 1000);
     this.lastT = now;
     const input = this.input;
-
+    if (this.state === 'playing') {
+      this.updatePlaying(dt);
+      return;
+    }
     if (this.state === 'menu') {
       if (input.wasPressed('Enter')) this.startGame(false);
       if (input.wasPressed('KeyN')) this.startGame(true);
-      this.renderer.draw(this);
-      input.endFrame();
-      return;
-    }
-    if (this.state === 'paused') {
+    } else if (this.state === 'paused') {
       if (input.wasPressed('KeyP') || input.wasPressed('Enter')) this.resumeGame();
       if (input.wasPressed('KeyM')) this.sounds.setMuted(!this.sounds.muted);
-      this.renderer.draw(this);
-      input.endFrame();
-      return;
-    }
-    if (this.state === 'busted' || this.state === 'wasted') {
+    } else if (this.state === 'busted' || this.state === 'wasted') {
       if (input.wasPressed('Enter')) {
         this.hud.hideMenu();
         this.state = 'playing';
       }
-      this.renderer.draw(this);
-      input.endFrame();
-      return;
     }
-
-    this.updatePlaying(dt);
+    this.renderer.draw(this);
+    input.endFrame();
   }
 
-  updatePlaying(dt) {
+  // Hotkeys that work while playing: pause, mission, radio, weapons,
+  // and getting in and out of cars.
+  handleHotkeys() {
     const input = this.input;
     const p = this.player;
-
-    this.elapsed += dt;
-    this.clock += dt;
-    // Autosave every 30 seconds of play.
-    if (Math.floor(this.elapsed) % 30 === 0 && Math.floor(this.elapsed) !== Math.floor(this.elapsed - dt)) {
-      this.saveGame();
-    }
-
     if (input.wasPressed('KeyP') || input.wasPressed('Escape')) this.pauseGame();
     if (input.wasPressed('KeyM')) {
       if (!this.missions.active) this.missions.startStory();
@@ -467,15 +454,11 @@ export class Game {
         if (car) this.enterCar(car);
       }
     }
+  }
 
-    // World-space mouse position, for aiming.
-    const wx = this.input.mouse.x + this.renderer.cam.x;
-    const wy = this.input.mouse.y + this.renderer.cam.y;
-
-    if (p.inCar && this.playerCar) this.drivePlayer(dt);
-    else this.walkPlayer(dt, wx, wy);
-
-    // The world ticks on.
+  // Advance the whole world one frame: traffic, crowds, gangs, cops,
+  // missions, pickups and effects.
+  tickWorld(dt) {
     this.traffic.update(dt, this);
     this.crowd.update(dt, this);
     this.gangs.update(dt, this, this.rng);
@@ -489,6 +472,29 @@ export class Game {
     this.repopulate(dt);
     this.collectPickups();
     this.tickEffects(dt);
+  }
+
+  updatePlaying(dt) {
+    const input = this.input;
+    const p = this.player;
+
+    this.elapsed += dt;
+    this.clock += dt;
+    // Autosave every 30 seconds of play.
+    if (Math.floor(this.elapsed) % 30 === 0 && Math.floor(this.elapsed) !== Math.floor(this.elapsed - dt)) {
+      this.saveGame();
+    }
+
+    this.handleHotkeys();
+
+    // World-space mouse position, for aiming.
+    const wx = this.input.mouse.x + this.renderer.cam.x;
+    const wy = this.input.mouse.y + this.renderer.cam.y;
+
+    if (p.inCar && this.playerCar) this.drivePlayer(dt);
+    else this.walkPlayer(dt, wx, wy);
+
+    this.tickWorld(dt);
 
     // Camera, render, HUD.
     const fx = p.inCar ? this.playerCar.x : p.x;
