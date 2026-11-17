@@ -1,4 +1,4 @@
-// Missions: a six-job story for Marco Solano, plus taxi fares,
+// Missions: a seven-job story for Marco Solano, plus taxi fares,
 // courier runs and hidden cash stashes to chase while free-roaming.
 import { distSq } from './config.js';
 import { CourierRun, makeCourierJob } from './courier.js';
@@ -78,6 +78,17 @@ export const STORY = [
   },
 ];
 
+// Where Marco is right now, in the car or on foot.
+function positionOf(game) {
+  const p = game.player;
+  if (p.inCar && game.playerCar) return { x: game.playerCar.x, y: game.playerCar.y };
+  return { x: p.x, y: p.y };
+}
+
+function within(x, y, target, radius) {
+  return distSq(x, y, target.x, target.y) < radius * radius;
+}
+
 export class MissionManager {
   constructor(game) {
     this.game = game;
@@ -116,7 +127,8 @@ export class MissionManager {
   }
 
   currentStep() {
-    return this.active ? this.active.def.steps[this.active.step] : null;
+    if (!this.active) return null;
+    return this.active.def.steps[this.active.step];
   }
 
   currentTarget() {
@@ -159,20 +171,18 @@ export class MissionManager {
     this.active.holdT = 0;
     if (this.active.step >= this.active.def.steps.length) {
       this.complete();
-    } else {
-      this.game.toast('NEW OBJECTIVE', this.currentStep().text, 5);
+      return;
     }
+    this.game.toast('NEW OBJECTIVE', this.currentStep().text, 5);
   }
 
+  // One frame of the active story step. Each step type has its own
+  // handler below; the timer runs for every step that carries one.
   update(dt) {
     const g = this.game;
     if (!this.active) return;
     const step = this.currentStep();
     if (!step) return;
-    const p = g.player;
-    const px = p.inCar ? g.playerCar.x : p.x;
-    const py = p.inCar ? g.playerCar.y : p.y;
-
     if (step.timer) {
       this.active.timer += dt;
       if (this.active.timer > step.timer) {
@@ -180,56 +190,74 @@ export class MissionManager {
         return;
       }
     }
+    const handler = this.stepHandlers[step.type];
+    if (handler) handler.call(this, dt, step);
+  }
 
-    switch (step.type) {
-      case 'goto': {
-        const target = g.city.landmarks[step.place];
-        if (distSq(px, py, target.x, target.y) < step.radius * step.radius) this.nextStep();
-        break;
-      }
-      case 'stealCar': {
-        if (p.inCar) this.nextStep();
-        break;
-      }
-      case 'stealVan': {
-        if (p.inCar && g.playerCar && g.playerCar.van) this.nextStep();
-        break;
-      }
-      case 'stealModel': {
-        if (p.inCar && g.playerCar && g.playerCar.model.name === step.model) this.nextStep();
-        break;
-      }
-      case 'wanted': {
-        if (g.wanted >= step.stars) this.nextStep();
-        break;
-      }
-      case 'loseCops': {
-        if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
-        break;
-      }
-      case 'rob': {
-        const bank = g.city.landmarks.bank;
-        if (distSq(px, py, bank.x, bank.y) < 100 * 100) {
-          this.active.holdT += dt;
-          if (this.active.holdT >= step.hold) {
-            g.player.money += 800;
-            g.addCrime(3, 'Bank robbed! $800 grabbed — the whole precinct is coming.');
-            g.sounds.cash();
-            this.nextStep();
-          }
-        } else {
-          this.active.holdT = 0;
-        }
-        break;
-      }
-      case 'escape': {
-        g.setWanted(Math.max(g.wanted, step.stars));
-        if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
-        break;
-      }
-      default:
-        break;
+  // Dispatch table: one method per step type.
+  get stepHandlers() {
+    return {
+      goto: this.stepGoto,
+      stealCar: this.stepStealCar,
+      stealVan: this.stepStealVan,
+      stealModel: this.stepStealModel,
+      wanted: this.stepWanted,
+      loseCops: this.stepLoseCops,
+      rob: this.stepRob,
+      escape: this.stepEscape,
+    };
+  }
+
+  stepGoto(dt, step) {
+    const g = this.game;
+    const pos = positionOf(g);
+    const target = g.city.landmarks[step.place];
+    if (within(pos.x, pos.y, target, step.radius)) this.nextStep();
+  }
+
+  stepStealCar() {
+    if (this.game.player.inCar) this.nextStep();
+  }
+
+  stepStealVan() {
+    const g = this.game;
+    if (g.player.inCar && g.playerCar && g.playerCar.van) this.nextStep();
+  }
+
+  stepStealModel(dt, step) {
+    const g = this.game;
+    if (g.player.inCar && g.playerCar && g.playerCar.model.name === step.model) this.nextStep();
+  }
+
+  stepWanted(dt, step) {
+    if (this.game.wanted >= step.stars) this.nextStep();
+  }
+
+  stepLoseCops() {
+    const g = this.game;
+    if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
+  }
+
+  stepRob(dt, step) {
+    const g = this.game;
+    const pos = positionOf(g);
+    const bank = g.city.landmarks.bank;
+    if (!within(pos.x, pos.y, bank, 100)) {
+      this.active.holdT = 0;
+      return;
     }
+    this.active.holdT += dt;
+    if (this.active.holdT < step.hold) return;
+    g.player.money += 800;
+    g.addCrime(3, 'Bank robbed! $800 grabbed — the whole precinct is coming.');
+    g.sounds.cash();
+    this.nextStep();
+  }
+
+  stepEscape(dt, step) {
+    const g = this.game;
+    g.setWanted(Math.max(g.wanted, step.stars));
+    if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
   }
 
   // --- Taxi fares (side activity) ---
@@ -242,14 +270,9 @@ export class MissionManager {
     const from = spots[Math.floor(Math.random() * spots.length)];
     let to = spots[Math.floor(Math.random() * spots.length)];
     if (to === from) to = spots[(spots.indexOf(from) + 3) % spots.length];
-    this.taxi = {
-      pickup: from,
-      drop: to,
-      stage: 'pickup',
-      pay: 60 + Math.floor(Math.random() * 60),
-      timer: 0,
-    };
-    g.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${this.taxi.pay}.`, 5);
+    const pay = 60 + Math.floor(Math.random() * 60);
+    this.taxi = { pickup: from, drop: to, stage: 'pickup', pay, timer: 0 };
+    g.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${pay}.`, 5);
     return true;
   }
 
@@ -259,12 +282,12 @@ export class MissionManager {
     const car = g.playerCar;
     this.taxi.timer += dt;
     if (this.taxi.stage === 'pickup') {
-      if (distSq(car.x, car.y, this.taxi.pickup.x, this.taxi.pickup.y) < 80 * 80) {
+      if (within(car.x, car.y, this.taxi.pickup, 80)) {
         this.taxi.stage = 'drop';
         g.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
         g.sounds.pickup();
       }
-    } else if (distSq(car.x, car.y, this.taxi.drop.x, this.taxi.drop.y) < 80 * 80) {
+    } else if (within(car.x, car.y, this.taxi.drop, 80)) {
       g.player.money += this.taxi.pay;
       g.sounds.cash();
       g.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
@@ -334,14 +357,13 @@ export class MissionManager {
     const p = g.player;
     for (const pkg of this.packages) {
       if (pkg.found) continue;
-      if (distSq(p.x, p.y, pkg.x, pkg.y) < 40 * 40) {
-        pkg.found = true;
-        this.packagesFound += 1;
-        p.money += 150;
-        g.sounds.cash();
-        g.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
-        g.addParticles(pkg.x, pkg.y, 12, '#f2c230');
-      }
+      if (!within(p.x, p.y, pkg, 40)) continue;
+      pkg.found = true;
+      this.packagesFound += 1;
+      p.money += 150;
+      g.sounds.cash();
+      g.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
+      g.addParticles(pkg.x, pkg.y, 12, '#f2c230');
     }
   }
 }

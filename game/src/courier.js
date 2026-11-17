@@ -7,8 +7,7 @@
 // machine: pickup, then deliver, then done or expired.
 import { distSq } from './config.js';
 
-const PICKUP_RADIUS = 80;
-const DROP_RADIUS = 80;
+const MARKER_RADIUS = 80;
 const MIN_TIME = 45; // seconds, even for a trip across the street
 const MAX_TIME = 150; // seconds, even for a trip across the city
 
@@ -18,7 +17,10 @@ export function makeCourierJob(rng, landmarks) {
   const names = Object.keys(landmarks);
   const pickupName = names[Math.floor(rng() * names.length)];
   let dropName = names[Math.floor(rng() * names.length)];
-  if (dropName === pickupName) dropName = names[(names.indexOf(pickupName) + 4) % names.length];
+  if (dropName === pickupName) {
+    const next = (names.indexOf(pickupName) + 4) % names.length;
+    dropName = names[next];
+  }
   const pickup = landmarks[pickupName];
   const drop = landmarks[dropName];
   const distance = Math.hypot(drop.x - pickup.x, drop.y - pickup.y);
@@ -27,11 +29,14 @@ export function makeCourierJob(rng, landmarks) {
   return { pickup, drop, pickupName, dropName, pay, timeLimit };
 }
 
+// Turn a landmark key like 'policeHQ' into 'Police HQ' for the HUD.
 function prettyName(key) {
-  return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (c) => c.toUpperCase())
-    .trim();
+  const spaced = key.replace(/([A-Z])/g, ' $1');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
+}
+
+function near(px, py, spot) {
+  return distSq(px, py, spot.x, spot.y) < MARKER_RADIUS * MARKER_RADIUS;
 }
 
 export class CourierRun {
@@ -48,11 +53,13 @@ export class CourierRun {
 
   // Where the marker should point right now.
   get target() {
-    return this.stage === 'pickup' ? this.pickup : this.drop;
+    if (this.stage === 'pickup') return this.pickup;
+    return this.drop;
   }
 
   get timeLeft() {
-    return Math.max(0, this.timeLimit - this.elapsed);
+    const left = this.timeLimit - this.elapsed;
+    return left > 0 ? left : 0;
   }
 
   get label() {
@@ -71,13 +78,13 @@ export class CourierRun {
       return 'expired';
     }
     if (this.stage === 'pickup') {
-      if (distSq(px, py, this.pickup.x, this.pickup.y) < PICKUP_RADIUS * PICKUP_RADIUS) {
+      if (near(px, py, this.pickup)) {
         this.stage = 'deliver';
         return 'picked';
       }
       return null;
     }
-    if (distSq(px, py, this.drop.x, this.drop.y) < DROP_RADIUS * DROP_RADIUS) {
+    if (near(px, py, this.drop)) {
       this.stage = 'done';
       return 'delivered';
     }
