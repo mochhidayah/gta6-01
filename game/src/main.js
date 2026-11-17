@@ -17,6 +17,7 @@ import { SoundBank } from './audio.js';
 import { applyShot } from './shots.js';
 import { StuntRamps } from './stunts.js';
 import { Gangs } from './gangs.js';
+import { Weather } from './weather.js';
 import { seeded } from './rng.js';
 
 export class Game {
@@ -30,6 +31,7 @@ export class Game {
     this.missions = new MissionManager(this);
     this.stunts = new StuntRamps();
     this.gangs = new Gangs(this.city);
+    this.weather = new Weather();
     this.renderer = new Renderer(this.canvas, document.getElementById('minimap'));
     this.hud = new HUD();
     this.input = new Input(this.canvas);
@@ -462,6 +464,7 @@ export class Game {
     this.traffic.update(dt, this);
     this.crowd.update(dt, this);
     this.gangs.update(dt, this, this.rng);
+    this.weather.update(dt, this);
     this.updateCops(dt);
     this.spawnPolice(dt);
     this.updateWanted(dt);

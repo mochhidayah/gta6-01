@@ -69,6 +69,8 @@ export class Renderer {
     this.drawPlayer(ctx, game);
     this.drawEffects(ctx, game);
     this.drawSunset(ctx);
+    // Rain falls over the whole viewport, above the world.
+    game.weather.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H });
     ctx.restore();
     this.drawMinimap(game);
     if (game.player.hurtFlash > 0) {
