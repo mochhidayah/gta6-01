@@ -1,12 +1,15 @@
 // Palmera Bay — tuning, palette and shared constants.
 //
-// Every number that shapes the game lives here, so the rest of the code
-// reads like the design: the city is a grid of avenues and streets, the
-// beach runs along the south edge, and the sun never quite sets.
+// Every number that shapes the game lives here, so the rest of the
+// code reads like the design: the city is a grid of avenues and
+// streets, the beach runs along the south edge, and the sun never
+// quite sets.
 export const WORLD = { width: 3600, height: 2600 };
 
-// Road grid.
+// The road grid: avenue spacing, street spacing, road width.
 export const ROAD = { width: 72, avenueGap: 340, streetGap: 300 };
+
+// Where the sand starts and where the water starts, in world pixels.
 export const SHORE = { sandY: 2320, waterY: 2480 };
 
 // Palette — sun-soaked: warm grass, grey asphalt, pastel rooftops.
@@ -25,37 +28,26 @@ export const COLORS = {
   buildingLine: '#2c2c34',
 };
 
-export const PLAYER_STATS = {
-  walk: 170,
-  sprint: 265,
-  radius: 13,
-  health: 100,
-};
+// How Marco moves on foot.
+export const PLAYER_STATS = { walk: 170, sprint: 265, radius: 13, health: 100 };
 
-export const CAR_STATS = {
-  brake: 700,
-  reverseAccel: 260,
-  topReverse: 160,
-  steer: 2.6,
-  grip: 6.5,
-};
+// How cars handle: braking, reversing, steering bite and grip.
+export const CAR_STATS = { brake: 700, reverseAccel: 260, topReverse: 160, steer: 2.6, grip: 6.5 };
 
+// The wanted ladder: five stars, and how the heat cools off.
 export const WANTED_RULES = {
   stars: 5,
   coolOffDelay: 12, // quiet seconds before stars start to fall
   coolOffStep: 8, // seconds per star lost while hidden
 };
 
-export const ECONOMY = {
-  startCash: 250,
-  taxiMin: 60,
-  taxiMax: 120,
-  stashCash: 150,
-};
+// The starting economy: pocket cash, taxi fares and stash value.
+export const ECONOMY = { startCash: 250, taxiMin: 60, taxiMax: 120, stashCash: 150 };
 
 export const SAVE_KEY = 'palmera-bay-save-v1';
 
-// The car catalogue — every model invented for this game.
+// The car catalogue — every model invented for this game. Top speed
+// and acceleration are in the game's own units; a taxi earns fares.
 export const CAR_CATALOG = [
   { name: 'Falcon GT', color: '#e33f2f', top: 520, accel: 480 },
   { name: 'Marina Sedan', color: '#3f7fd0', top: 430, accel: 400 },
@@ -70,6 +62,7 @@ export const CAR_CATALOG = [
 // The armored van for the final job — slow, heavy, worth a fortune.
 export const ARMORED_VAN = { name: 'Armadillo Van', color: '#8a8f7a', top: 360, accel: 300, van: true };
 
+// First names for the pedestrians of Palmera Bay.
 export const PED_NAMES = [
   'Marta', 'Dario', 'Yusuf', 'Carmen', 'Tomas', 'Lena', 'Rafi', 'Sofia',
   'Hector', 'Nadia', 'Paco', 'Iris', 'Bruno', 'Alba', 'Kiko', 'Rosa',
@@ -77,7 +70,9 @@ export const PED_NAMES = [
 
 // Small math helpers used across the game.
 export function clamp(value, low, high) {
-  return value < low ? low : value > high ? high : value;
+  if (value < low) return low;
+  if (value > high) return high;
+  return value;
 }
 
 export function lerp(a, b, t) {

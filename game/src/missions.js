@@ -65,6 +65,17 @@ export const STORY = [
       { type: 'goto', place: 'docks', text: 'Deliver the van to the South Docks', radius: 100, timer: 120 },
     ],
   },
+  {
+    id: 'm7',
+    title: 'The Getaway',
+    pay: 1800,
+    brief: 'The crew needs a fast car and a clean exit. Steal a Falcon GT — the fastest thing on the streets — and run it to Palmera Airfield before the precinct locks the city down.',
+    steps: [
+      { type: 'stealModel', model: 'Falcon GT', text: 'Steal a Falcon GT (the red one — fastest in town)' },
+      { type: 'goto', place: 'airport', text: 'Run it to Palmera Airfield', radius: 95, timer: 100 },
+      { type: 'escape', stars: 3, text: 'Escape! Lose the 3-star wanted level', radius: 0 },
+    ],
+  },
 ];
 
 export class MissionManager {
@@ -182,6 +193,10 @@ export class MissionManager {
       }
       case 'stealVan': {
         if (p.inCar && g.playerCar && g.playerCar.van) this.nextStep();
+        break;
+      }
+      case 'stealModel': {
+        if (p.inCar && g.playerCar && g.playerCar.model.name === step.model) this.nextStep();
         break;
       }
       case 'wanted': {

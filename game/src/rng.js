@@ -16,17 +16,19 @@ export function seeded(seed) {
 
 // Pick one element of an array, uniformly.
 export function choose(rng, list) {
-  return list[Math.floor(rng() * list.length)];
+  const index = Math.floor(rng() * list.length);
+  return list[index];
 }
 
 // A float in [low, high).
 export function between(rng, low, high) {
-  return low + rng() * (high - low);
+  return low + (high - low) * rng();
 }
 
 // An integer in [low, high], inclusive.
 export function betweenInt(rng, low, high) {
-  return low + Math.floor(rng() * (high - low + 1));
+  const span = high - low + 1;
+  return low + Math.floor(rng() * span);
 }
 
 // A coin flip with probability p.

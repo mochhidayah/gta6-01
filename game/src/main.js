@@ -90,7 +90,7 @@ export class Game {
     this.hud.showMenu(
       'PALMERA BAY',
       `<p class="tag">A sun-soaked open-world crime story — an original game, no borrowed city.</p>
-       <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Six jobs stand between him and freedom.</p>
+       <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Seven jobs stand between him and freedom.</p>
        <p><b>WASD</b> move / drive &nbsp;·&nbsp; <b>E</b> steal &amp; enter car &nbsp;·&nbsp; <b>Mouse</b> aim, <b>Click</b> shoot &nbsp;·&nbsp; <b>Space</b> punch / handbrake<br>
        <b>M</b> next mission &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>1</b> fists / <b>2</b> pistol</p>
        <p>Missions, taxi fares, courier runs, hidden cash stashes, 5-star police chases — and the whole city is yours.</p>

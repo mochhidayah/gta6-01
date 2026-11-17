@@ -13,10 +13,6 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
-const args = process.argv.slice(2);
-const portFlag = args.indexOf('--port');
-const requested = portFlag === -1 ? 8080 : Number(args[portFlag + 1]);
-const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -42,6 +38,26 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// Parse --port from the argv; anything invalid falls back to 8080.
+function parsePort(argv) {
+  const flag = argv.indexOf('--port');
+  const value = flag === -1 ? NaN : Number(argv[flag + 1]);
+  return Number.isInteger(value) && value > 0 && value < 65536 ? value : 8080;
+}
+
+const port = parsePort(process.argv.slice(2));
+
+// Resolve a request path to a file inside game/, or null if it escapes.
+function resolveInside(pathname) {
+  const file = resolve(join(root, normalize(pathname)));
+  if (file !== root && !file.startsWith(root + sep)) return null;
+  return file;
+}
+
+function mimeFor(file) {
+  return MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
+}
+
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
   let pathname;
@@ -52,8 +68,8 @@ createServer((request, response) => {
     return;
   }
   if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
+  const file = resolveInside(pathname);
+  if (file === null) {
     response.writeHead(403).end('forbidden');
     return;
   }
@@ -67,7 +83,7 @@ createServer((request, response) => {
     return;
   }
   response.writeHead(200, {
-    'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
+    'content-type': mimeFor(file),
     'content-length': size,
     'cache-control': 'no-store',
   });
