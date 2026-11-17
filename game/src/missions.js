@@ -1,41 +1,51 @@
 // Missions: a six-job story for Marco Solano, plus taxi fares and
-// hidden cash stashes for free-roam progression.
-import { dist2 } from './config.js';
+// hidden cash stashes to chase while free-roaming.
+import { distSq } from './config.js';
 
 export const STORY = [
   {
-    id: 'm1', title: 'First Wheels', pay: 300,
-    brief: 'Marco needs a ride. Steal any car and bring it to Solano Garage.',
+    id: 'm1',
+    title: 'First Wheels',
+    pay: 300,
+    brief: 'Marco needs wheels. Lift any car off the street and bring it to Solano Garage.',
     steps: [
       { type: 'stealCar', text: 'Steal a car (walk up to one and press E)' },
       { type: 'goto', place: 'garage', text: 'Drive it to Solano Garage', radius: 90 },
     ],
   },
   {
-    id: 'm2', title: 'The Pickup', pay: 450,
-    brief: 'Lucia is waiting at Coral Marina. Pick her up and drive her to Club Flamingo before the club fills up.',
+    id: 'm2',
+    title: 'The Pickup',
+    pay: 450,
+    brief: 'Lucia is waiting down at Coral Marina. Fetch her and get her to Club Flamingo before the doors fill up.',
     steps: [
       { type: 'goto', place: 'marina', text: 'Pick up Lucia at Coral Marina', radius: 80 },
       { type: 'goto', place: 'club', text: 'Drive Lucia to Club Flamingo', radius: 90, timer: 75 },
     ],
   },
   {
-    id: 'm3', title: 'Hot Pursuit', pay: 500,
-    brief: 'The precinct is onto Marco. Get a 3-star wanted level, then lose the cops.',
+    id: 'm3',
+    title: 'Hot Pursuit',
+    pay: 500,
+    brief: 'The precinct has Marco in its sights. Stir up a 3-star wanted level — then vanish.',
     steps: [
       { type: 'wanted', stars: 3, text: 'Raise your wanted level to 3 stars (cause chaos!)' },
       { type: 'loseCops', text: 'Lose the cops — stay out of sight until the heat dies down' },
     ],
   },
   {
-    id: 'm4', title: 'The Drop', pay: 650,
-    brief: 'A package for the Golden Palm Pawn. Deliver it — and mind the checkpoints.',
+    id: 'm4',
+    title: 'The Drop',
+    pay: 650,
+    brief: 'A package for the Golden Palm Pawn, and the clock is running. Deliver it in one piece.',
     steps: [
       { type: 'goto', place: 'pawnshop', text: 'Deliver the package to Golden Palm Pawn', radius: 85, timer: 90 },
     ],
   },
   {
-    id: 'm5', title: 'Bank Job', pay: 1200,
+    id: 'm5',
+    title: 'Bank Job',
+    pay: 1200,
     brief: 'Palmera Reserve Bank, midday. Grab the cash, then outrun a 4-star response.',
     steps: [
       { type: 'goto', place: 'bank', text: 'Reach Palmera Reserve Bank', radius: 85 },
@@ -44,8 +54,10 @@ export const STORY = [
     ],
   },
   {
-    id: 'm6', title: 'The Big Score', pay: 2500,
-    brief: 'One last job: steal the armored van at the stadium and bring it to the South Docks. Then Marco is free.',
+    id: 'm6',
+    title: 'The Big Score',
+    pay: 2500,
+    brief: 'One last job: lift the armored van parked at Bay Sharks Stadium and run it to the South Docks. Then Marco walks free.',
     steps: [
       { type: 'goto', place: 'stadium', text: 'Reach Bay Sharks Stadium', radius: 95 },
       { type: 'stealVan', text: 'Steal the armored van' },
@@ -57,20 +69,29 @@ export const STORY = [
 export class MissionManager {
   constructor(game) {
     this.game = game;
-    this.storyIndex = 0;      // next story mission (0..STORY.length)
-    this.active = null;       // {def, step, timer, holdT, ...}
-    this.taxi = null;         // active taxi fare {pickup, drop, pay}
+    this.storyIndex = 0; // next story mission (0..STORY.length)
+    this.active = null; // {def, step, timer, holdT}
+    this.taxi = null; // active fare {pickup, drop, stage, pay, timer}
     this.completed = 0;
     this.packagesFound = 0;
-    this.packages = [];       // hidden cash stashes {x,y,found}
+    this.packages = []; // hidden cash stashes {x, y, found}
+    this.vanReady = false; // the m6 armored van has been parked at the stadium
   }
 
-  get storyDone() { return this.storyIndex >= STORY.length; }
+  get storyDone() {
+    return this.storyIndex >= STORY.length;
+  }
 
   startStory() {
     if (this.storyDone) return false;
     const def = STORY[this.storyIndex];
-    this.active = { def, step: 0, timer: 0, holdT: 0, started: true };
+    this.active = { def, step: 0, timer: 0, holdT: 0 };
+    if (def.id === 'm6' && !this.vanReady) {
+      // Park the armored van at the stadium before the job begins.
+      const spot = this.game.city.landmarks.stadium;
+      this.game.traffic.spawnVan(spot.x + 60, spot.y + 30);
+      this.vanReady = true;
+    }
     this.announce(def);
     return true;
   }
@@ -110,7 +131,11 @@ export class MissionManager {
     this.storyIndex += 1;
     this.active = null;
     if (this.storyDone) {
-      g.toast('PALMERA BAY IS YOURS', 'Every job done. Marco Solano runs this city now — free roam, fares and stashes remain.', 9);
+      g.toast(
+        'PALMERA BAY IS YOURS',
+        'Every job done. Marco Solano runs this city now — free roam, fares and stashes remain.',
+        9,
+      );
       g.saveGame();
     }
   }
@@ -119,10 +144,10 @@ export class MissionManager {
     this.active.step += 1;
     this.active.timer = 0;
     this.active.holdT = 0;
-    if (this.active.step >= this.active.def.steps.length) this.complete();
-    else {
-      const step = this.currentStep();
-      this.game.toast('NEW OBJECTIVE', step.text, 5);
+    if (this.active.step >= this.active.def.steps.length) {
+      this.complete();
+    } else {
+      this.game.toast('NEW OBJECTIVE', this.currentStep().text, 5);
     }
   }
 
@@ -145,8 +170,8 @@ export class MissionManager {
 
     switch (step.type) {
       case 'goto': {
-        const t = g.city.landmarks[step.place];
-        if (dist2(px, py, t.x, t.y) < step.radius * step.radius) this.nextStep();
+        const target = g.city.landmarks[step.place];
+        if (distSq(px, py, target.x, target.y) < step.radius * step.radius) this.nextStep();
         break;
       }
       case 'stealCar': {
@@ -166,8 +191,8 @@ export class MissionManager {
         break;
       }
       case 'rob': {
-        const t = g.city.landmarks.bank;
-        if (dist2(px, py, t.x, t.y) < 100 * 100) {
+        const bank = g.city.landmarks.bank;
+        if (distSq(px, py, bank.x, bank.y) < 100 * 100) {
           this.active.holdT += dt;
           if (this.active.holdT >= step.hold) {
             g.player.money += 800;
@@ -175,7 +200,9 @@ export class MissionManager {
             g.sounds.cash();
             this.nextStep();
           }
-        } else this.active.holdT = 0;
+        } else {
+          this.active.holdT = 0;
+        }
         break;
       }
       case 'escape': {
@@ -183,11 +210,13 @@ export class MissionManager {
         if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
         break;
       }
-      default: break;
+      default:
+        break;
     }
   }
 
   // --- Taxi fares (side activity) ---
+
   offerTaxi() {
     const g = this.game;
     if (this.taxi || this.active) return false;
@@ -196,7 +225,13 @@ export class MissionManager {
     const from = spots[Math.floor(Math.random() * spots.length)];
     let to = spots[Math.floor(Math.random() * spots.length)];
     if (to === from) to = spots[(spots.indexOf(from) + 3) % spots.length];
-    this.taxi = { pickup: from, drop: to, stage: 'pickup', pay: 60 + Math.floor(Math.random() * 60), timer: 0 };
+    this.taxi = {
+      pickup: from,
+      drop: to,
+      stage: 'pickup',
+      pay: 60 + Math.floor(Math.random() * 60),
+      timer: 0,
+    };
     g.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${this.taxi.pay}.`, 5);
     return true;
   }
@@ -207,26 +242,36 @@ export class MissionManager {
     const car = g.playerCar;
     this.taxi.timer += dt;
     if (this.taxi.stage === 'pickup') {
-      if (dist2(car.x, car.y, this.taxi.pickup.x, this.taxi.pickup.y) < 80 * 80) {
+      if (distSq(car.x, car.y, this.taxi.pickup.x, this.taxi.pickup.y) < 80 * 80) {
         this.taxi.stage = 'drop';
         g.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
         g.sounds.pickup();
       }
-    } else if (dist2(car.x, car.y, this.taxi.drop.x, this.taxi.drop.y) < 80 * 80) {
+    } else if (distSq(car.x, car.y, this.taxi.drop.x, this.taxi.drop.y) < 80 * 80) {
       g.player.money += this.taxi.pay;
       g.sounds.cash();
       g.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
       this.taxi = null;
     }
-    if (this.taxi && this.taxi.timer > 120) { this.taxi = null; g.toast('FARE LOST', 'The passenger gave up waiting.', 4); }
+    if (this.taxi && this.taxi.timer > 120) {
+      this.taxi = null;
+      g.toast('FARE LOST', 'The passenger gave up waiting.', 4);
+    }
   }
 
   // --- Hidden cash stashes ---
-  placePackages(rng) {
+
+  placePackages() {
     const spots = [
-      { x: 500, y: 2400 }, { x: 1500, y: 2450 }, { x: 2800, y: 2400 },
-      { x: 3200, y: 1800 }, { x: 300, y: 900 }, { x: 2400, y: 500 },
-      { x: 1800, y: 1500 }, { x: 900, y: 1900 }, { x: 2600, y: 1100 },
+      { x: 500, y: 2400 },
+      { x: 1500, y: 2450 },
+      { x: 2800, y: 2400 },
+      { x: 3200, y: 1800 },
+      { x: 300, y: 900 },
+      { x: 2400, y: 500 },
+      { x: 1800, y: 1500 },
+      { x: 900, y: 1900 },
+      { x: 2600, y: 1100 },
       { x: 1300, y: 700 },
     ];
     this.packages = spots.map((s) => ({ ...s, found: false }));
@@ -237,7 +282,7 @@ export class MissionManager {
     const p = g.player;
     for (const pkg of this.packages) {
       if (pkg.found) continue;
-      if (dist2(p.x, p.y, pkg.x, pkg.y) < 40 * 40) {
+      if (distSq(p.x, p.y, pkg.x, pkg.y) < 40 * 40) {
         pkg.found = true;
         this.packagesFound += 1;
         p.money += 150;
