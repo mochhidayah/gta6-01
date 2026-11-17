@@ -9,8 +9,9 @@
 //
 // The game itself is an original top-down open-world crime game: a seeded
 // city to explore on foot and by car, traffic and pedestrians, cars to
-// steal, a wanted level with police who chase, six story missions, combat,
-// a HUD with a minimap, synthesised sound and radio, and a save.
+// steal, a wanted level with police who chase, six story missions,
+// courier runs, combat, a HUD with a minimap, synthesised sound and
+// radio, and a save.
 //
 // Play it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
@@ -21,29 +22,36 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+// Where the entry lives, and where the grader wants the hand-in.
+const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) {
-  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Copy a directory tree when it exists; the screenshots folder is
+// optional in a work-in-progress tree.
+function copyTree(name) {
+  const from = join(repoRoot, name);
+  if (!existsSync(from)) return;
+  cpSync(from, join(outputDir, name), { recursive: true });
 }
+
+mkdirSync(outputDir, { recursive: true });
+copyTree('game');
+mkdirSync(join(outputDir, 'screenshots'), { recursive: true });
+copyTree('screenshots');
 
 // The scorer's caps, from the kit's reference/gate.json: at most 4
 // screenshots of 256 KiB each; at most 993 files and 48 MiB under game/;
 // no game/ path over 1000 bytes. Palmera Bay's build is deterministic —
 // the city is seeded, so two runs of this program write byte-identical
 // dossier.json files.
-const dossier = buildDossier(out, {
+const dossier = buildDossier(outputDir, {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },
   game_max_files: 993,
   game_max_bytes: 50331648,
   game_path_max_bytes: 1000,
 });
-writeFileSync(join(out, 'dossier.json'), dossier);
+writeFileSync(join(outputDir, 'dossier.json'), dossier);
 
 // One line on stdout so the build's result is visible in the log.
-console.log(`Palmera Bay handed in: ${dossier.length} bytes of dossier in ${out}`);
+console.log(`Palmera Bay handed in: ${dossier.length} bytes of dossier in ${outputDir}`);
