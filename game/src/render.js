@@ -1,8 +1,28 @@
-// Rendering: the top-down city, cars, people, particles, lighting and
-// the minimap. Everything is drawn with canvas primitives — the game
-// ships no image assets at all.
+// Rendering: the top-down city, cars, people, particles, sunset light
+// and the minimap. Everything is drawn with canvas primitives — the
+// game ships no image assets at all, so the whole look is code.
+//
+// The draw order is the depth order: grass, roads, park, shore,
+// buildings, props, stashes, markers, people, cars, the player,
+// effects, and finally the sunset wash over everything.
 import { WORLD, ROAD, SHORE, COLORS, clamp } from './config.js';
 import { AVENUES, STREETS } from './city.js';
+
+// The rectangle of the world currently on screen, padded a little so
+// objects half in frame still draw.
+function visibleRect(cam, width, height, pad) {
+  return {
+    left: cam.x - pad,
+    right: cam.x + width + pad,
+    top: cam.y - pad,
+    bottom: cam.y + height + pad,
+  };
+}
+
+// Does a box overlap a rectangle? Used to skip off-screen drawing.
+function overlaps(rect, x, y, w, h) {
+  return x + w >= rect.left && x <= rect.right && y + h >= rect.top && y <= rect.bottom;
+}
 
 export class Renderer {
   constructor(canvas, minimapCanvas) {
@@ -18,11 +38,11 @@ export class Renderer {
   updateCamera(focusX, focusY, dt) {
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const targetX = clamp(focusX - w / 2, 0, Math.max(0, WORLD.width - w));
-    const targetY = clamp(focusY - h / 2, 0, Math.max(0, WORLD.height - h));
+    const goalX = clamp(focusX - w / 2, 0, Math.max(0, WORLD.width - w));
+    const goalY = clamp(focusY - h / 2, 0, Math.max(0, WORLD.height - h));
     const ease = Math.min(1, dt * 5);
-    this.cam.x += (targetX - this.cam.x) * ease;
-    this.cam.y += (targetY - this.cam.y) * ease;
+    this.cam.x += (goalX - this.cam.x) * ease;
+    this.cam.y += (goalY - this.cam.y) * ease;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 30);
   }
 
@@ -36,21 +56,21 @@ export class Renderer {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
     ctx.translate(-Math.round(this.cam.x), -Math.round(this.cam.y));
-    this.paintGround(ctx);
-    this.paintRoads(ctx);
-    this.paintPark(ctx, game);
-    this.paintBeach(ctx);
-    this.paintBuildings(ctx, game);
-    this.paintProps(ctx, game);
-    this.paintStashes(ctx, game);
-    this.paintBeacons(ctx, game);
-    this.paintCrowd(ctx, game);
-    this.paintCars(ctx, game);
-    this.paintPlayer(ctx, game);
-    this.paintEffects(ctx, game);
-    this.paintLight(ctx);
+    this.drawGrass(ctx);
+    this.drawRoads(ctx);
+    this.drawPark(ctx, game);
+    this.drawShore(ctx);
+    this.drawBuildings(ctx, game);
+    this.drawProps(ctx, game);
+    this.drawStashes(ctx, game);
+    this.drawMarkers(ctx, game);
+    this.drawPeople(ctx, game);
+    this.drawCars(ctx, game);
+    this.drawPlayer(ctx, game);
+    this.drawEffects(ctx, game);
+    this.drawSunset(ctx);
     ctx.restore();
-    this.paintMinimap(game);
+    this.drawMinimap(game);
     if (game.player.hurtFlash > 0) {
       ctx.fillStyle = `rgba(227,63,47,${game.player.hurtFlash * 0.45})`;
       ctx.fillRect(0, 0, W, H);
@@ -59,65 +79,65 @@ export class Renderer {
 
   // --- ground and roads ---
 
-  paintGround(ctx) {
+  drawGrass(ctx) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
     ctx.fillStyle = COLORS.grass;
-    ctx.fillRect(this.cam.x - 20, this.cam.y - 20, this.canvas.width + 40, this.canvas.height + 40);
-    // Mow stripes give the grass some texture.
-    const stripe = 120;
+    ctx.fillRect(this.cam.x - 20, this.cam.y - 20, w + 40, h + 40);
+    // Mow stripes give the grass some texture: alternating bands.
+    const band = 120;
     ctx.fillStyle = COLORS.grassShade;
-    const x0 = Math.floor(this.cam.x / stripe) * stripe;
-    const y0 = Math.floor(this.cam.y / stripe) * stripe;
-    for (let x = x0; x < this.cam.x + this.canvas.width; x += stripe * 2) {
-      for (let y = y0; y < this.cam.y + this.canvas.height; y += stripe) {
-        ctx.fillRect(x, y, stripe, stripe);
+    const startX = Math.floor(this.cam.x / band) * band;
+    const startY = Math.floor(this.cam.y / band) * band;
+    for (let x = startX; x < this.cam.x + w; x += band * 2) {
+      for (let y = startY; y < this.cam.y + h; y += band) {
+        ctx.fillRect(x, y, band, band);
       }
     }
   }
 
-  paintRoads(ctx) {
-    const x0 = this.cam.x - 80;
-    const x1 = this.cam.x + this.canvas.width + 80;
-    const y0 = this.cam.y - 80;
-    const y1 = this.cam.y + this.canvas.height + 80;
+  // Avenues and streets visible right now, as {x} / {y} centre lines.
+  visibleRoads() {
+    const pad = 80;
+    const x0 = this.cam.x - pad;
+    const x1 = this.cam.x + this.canvas.width + pad;
+    const y0 = this.cam.y - pad;
+    const y1 = this.cam.y + this.canvas.height + pad;
+    return {
+      avenues: AVENUES.filter((ax) => ax >= x0 && ax <= x1),
+      streets: STREETS.filter((sy) => sy >= y0 && sy <= y1),
+    };
+  }
+
+  drawRoads(ctx) {
+    const { avenues, streets } = this.visibleRoads();
     const half = ROAD.width / 2;
-    // Asphalt.
+    // Asphalt first.
     ctx.fillStyle = COLORS.asphalt;
-    for (const ax of AVENUES) {
-      if (ax < x0 || ax > x1) continue;
-      ctx.fillRect(ax - half, 0, ROAD.width, SHORE.sandY);
-    }
-    for (const sy of STREETS) {
-      if (sy < y0 || sy > y1) continue;
-      ctx.fillRect(0, sy - half, WORLD.width, ROAD.width);
-    }
-    // Sidewalks.
+    for (const ax of avenues) ctx.fillRect(ax - half, 0, ROAD.width, SHORE.sandY);
+    for (const sy of streets) ctx.fillRect(0, sy - half, WORLD.width, ROAD.width);
+    // Sidewalks hug both edges of every road.
     ctx.fillStyle = COLORS.sidewalk;
-    for (const ax of AVENUES) {
-      if (ax < x0 || ax > x1) continue;
+    for (const ax of avenues) {
       ctx.fillRect(ax - half - 8, 0, 8, SHORE.sandY);
       ctx.fillRect(ax + half, 0, 8, SHORE.sandY);
     }
-    for (const sy of STREETS) {
-      if (sy < y0 || sy > y1) continue;
+    for (const sy of streets) {
       ctx.fillRect(0, sy - half - 8, WORLD.width, 8);
       ctx.fillRect(0, sy + half, WORLD.width, 8);
     }
-    // Centre dashes.
+    // Centre dashes down every road.
     ctx.fillStyle = COLORS.laneMark;
-    for (const ax of AVENUES) {
-      if (ax < x0 || ax > x1) continue;
+    for (const ax of avenues) {
       for (let y = 0; y < SHORE.sandY; y += 56) ctx.fillRect(ax - 2, y, 4, 28);
     }
-    for (const sy of STREETS) {
-      if (sy < y0 || sy > y1) continue;
+    for (const sy of streets) {
       for (let x = 0; x < WORLD.width; x += 56) ctx.fillRect(x, sy - 2, 28, 4);
     }
-    // Crosswalks at every intersection.
+    // Crosswalks at every intersection in view.
     ctx.fillStyle = '#e8e4da';
-    for (const ax of AVENUES) {
-      if (ax < x0 || ax > x1) continue;
-      for (const sy of STREETS) {
-        if (sy < y0 || sy > y1) continue;
+    for (const ax of avenues) {
+      for (const sy of streets) {
         for (let i = -3; i <= 3; i++) {
           ctx.fillRect(ax + i * 10 - 3, sy - half + 4, 6, 12);
           ctx.fillRect(ax + i * 10 - 3, sy + half - 16, 6, 12);
@@ -126,7 +146,7 @@ export class Renderer {
     }
   }
 
-  paintPark(ctx, game) {
+  drawPark(ctx, game) {
     const p = game.city.park;
     ctx.fillStyle = COLORS.parkGreen;
     ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -144,7 +164,7 @@ export class Renderer {
     ctx.fillText('PALMERA PARK', p.x + p.w / 2, p.y + 24);
   }
 
-  paintBeach(ctx) {
+  drawShore(ctx) {
     // Sand, then the boardwalk, then Coral Bay itself.
     ctx.fillStyle = COLORS.sand;
     ctx.fillRect(0, SHORE.sandY, WORLD.width, SHORE.waterY - SHORE.sandY);
@@ -170,13 +190,10 @@ export class Renderer {
 
   // --- city furniture ---
 
-  paintBuildings(ctx, game) {
-    const viewLeft = this.cam.x - 40;
-    const viewRight = this.cam.x + this.canvas.width + 40;
-    const viewTop = this.cam.y - 40;
-    const viewBottom = this.cam.y + this.canvas.height + 40;
+  drawBuildings(ctx, game) {
+    const view = visibleRect(this.cam, this.canvas.width, this.canvas.height, 40);
     for (const b of game.city.buildings) {
-      if (b.x + b.w < viewLeft || b.x > viewRight || b.y + b.h < viewTop || b.y > viewBottom) continue;
+      if (!overlaps(view, b.x, b.y, b.w, b.h)) continue;
       // Drop shadow, then the roof.
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fillRect(b.x + 6, b.y + 8, b.w, b.h);
@@ -203,13 +220,10 @@ export class Renderer {
     }
   }
 
-  paintProps(ctx, game) {
-    const viewLeft = this.cam.x - 30;
-    const viewRight = this.cam.x + this.canvas.width + 30;
-    const viewTop = this.cam.y - 30;
-    const viewBottom = this.cam.y + this.canvas.height + 30;
+  drawProps(ctx, game) {
+    const view = visibleRect(this.cam, this.canvas.width, this.canvas.height, 30);
     for (const t of game.city.trees) {
-      if (t.x < viewLeft || t.x > viewRight || t.y < viewTop || t.y > viewBottom) continue;
+      if (!overlaps(view, t.x - t.r, t.y - t.r, t.r * 2, t.r * 2)) continue;
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
       ctx.ellipse(t.x + 3, t.y + 4, t.r, t.r * 0.7, 0, 0, Math.PI * 2);
@@ -223,13 +237,25 @@ export class Renderer {
       ctx.arc(t.x - 2, t.y - 2, t.r * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Park benches face the paths.
+    for (const bench of game.city.benches) {
+      if (!overlaps(view, bench.x - 12, bench.y - 4, 24, 8)) continue;
+      ctx.save();
+      ctx.translate(bench.x, bench.y);
+      ctx.rotate(bench.angle);
+      ctx.fillStyle = '#8a6b46';
+      ctx.fillRect(-11, -3, 22, 6);
+      ctx.fillStyle = '#6b5236';
+      ctx.fillRect(-11, 3, 22, 2);
+      ctx.restore();
+    }
     ctx.fillStyle = '#3a3a42';
     for (const l of game.city.lamps) ctx.fillRect(l.x - 2, l.y - 2, 4, 4);
     ctx.fillStyle = '#c0392b';
     for (const h of game.city.hydrants) ctx.fillRect(h.x - 3, h.y - 3, 6, 6);
   }
 
-  paintStashes(ctx, game) {
+  drawStashes(ctx, game) {
     for (const pkg of game.missions.packages) {
       if (pkg.found) continue;
       const pulse = 1 + Math.sin(this.time * 4) * 0.15;
@@ -244,9 +270,9 @@ export class Renderer {
     }
   }
 
-  // Mission marker, taxi marker and the bank-robbery ring.
-  paintBeacons(ctx, game) {
-    const beacon = (x, y, color, label) => {
+  // Mission marker, taxi marker, courier marker and the bank-robbery ring.
+  drawMarkers(ctx, game) {
+    const marker = (x, y, color, label) => {
       const bob = Math.sin(this.time * 3) * 4;
       ctx.save();
       ctx.translate(x, y + bob);
@@ -279,15 +305,15 @@ export class Renderer {
       }
     };
     const target = game.missions.currentTarget();
-    if (target) beacon(target.x, target.y, '#ffd23f', game.missions.currentStep().text);
+    if (target) marker(target.x, target.y, '#ffd23f', game.missions.currentStep().text);
     const taxi = game.missions.taxi;
     if (taxi) {
       const stop = taxi.stage === 'pickup' ? taxi.pickup : taxi.drop;
-      beacon(stop.x, stop.y, '#58d068', taxi.stage === 'pickup' ? 'PICKUP' : 'DROP-OFF');
+      marker(stop.x, stop.y, '#58d068', taxi.stage === 'pickup' ? 'PICKUP' : 'DROP-OFF');
     }
     const courier = game.missions.courier;
     if (courier) {
-      beacon(courier.target.x, courier.target.y, '#7fd0ff', courier.label);
+      marker(courier.target.x, courier.target.y, '#7fd0ff', courier.label);
     }
     const step = game.missions.currentStep();
     if (step && step.type === 'rob') {
@@ -302,19 +328,20 @@ export class Renderer {
 
   // --- actors ---
 
-  paintCrowd(ctx, game) {
+  drawPeople(ctx, game) {
     for (const ped of game.crowd.peds) {
-      this.paintPerson(ctx, ped.x, ped.y, ped.angle, ped.color, ped.skin, ped.state === 'down');
+      this.drawPerson(ctx, ped.x, ped.y, ped.angle, ped.color, ped.skin, ped.state === 'down');
     }
     for (const cop of game.cops) {
-      this.paintPerson(ctx, cop.x, cop.y, cop.angle, '#20242e', '#f0c8a0', cop.state === 'down', true);
+      this.drawPerson(ctx, cop.x, cop.y, cop.angle, '#20242e', '#f0c8a0', cop.state === 'down', true);
     }
   }
 
-  paintPerson(ctx, x, y, angle, shirt, skin, down, isCop = false) {
+  drawPerson(ctx, x, y, angle, shirt, skin, down, isCop = false) {
     ctx.save();
     ctx.translate(x, y);
     if (down) {
+      // Lying flat, head to one side.
       ctx.rotate(angle + Math.PI / 2);
       ctx.fillStyle = shirt;
       ctx.fillRect(-12, -6, 24, 12);
@@ -353,15 +380,15 @@ export class Renderer {
     ctx.restore();
   }
 
-  paintCars(ctx, game) {
+  drawCars(ctx, game) {
     const ordered = [...game.traffic.cars].sort((a, b) => a.y - b.y);
     for (const car of ordered) {
-      if (car !== game.playerCar) this.paintCar(ctx, car, game);
+      if (car !== game.playerCar) this.drawCar(ctx, car, game);
     }
-    if (game.playerCar) this.paintCar(ctx, game.playerCar, game);
+    if (game.playerCar) this.drawCar(ctx, game.playerCar, game);
   }
 
-  paintCar(ctx, car, game) {
+  drawCar(ctx, car, game) {
     ctx.save();
     ctx.translate(car.x, car.y);
     ctx.rotate(car.angle);
@@ -452,10 +479,10 @@ export class Renderer {
     }
   }
 
-  paintPlayer(ctx, game) {
+  drawPlayer(ctx, game) {
     const p = game.player;
     if (p.inCar) return;
-    this.paintPerson(ctx, p.x, p.y, p.angle, '#e33f2f', '#f0c8a0', false);
+    this.drawPerson(ctx, p.x, p.y, p.angle, '#e33f2f', '#f0c8a0', false);
     if (p.weapon === 'pistol') {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -476,7 +503,7 @@ export class Renderer {
 
   // --- effects and light ---
 
-  paintEffects(ctx, game) {
+  drawEffects(ctx, game) {
     for (const pt of game.particles) {
       ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
       ctx.fillStyle = pt.color;
@@ -506,7 +533,7 @@ export class Renderer {
   }
 
   // A warm sunset wash, stronger toward the screen edges.
-  paintLight(ctx) {
+  drawSunset(ctx) {
     const cx = this.cam.x + this.canvas.width / 2;
     const cy = this.cam.y + this.canvas.height / 2;
     const glow = ctx.createRadialGradient(cx, cy, 200, cx, cy, 900);
@@ -518,12 +545,19 @@ export class Renderer {
 
   // --- minimap ---
 
-  paintMinimap(game) {
+  drawMinimap(game) {
     const mm = this.mm;
     const mw = 190;
     const mh = 138;
     const sx = mw / WORLD.width;
     const sy = mh / WORLD.height;
+    // A filled dot on the minimap.
+    const blip = (x, y, r, color) => {
+      mm.fillStyle = color;
+      mm.beginPath();
+      mm.arc(x * sx, y * sy, r, 0, Math.PI * 2);
+      mm.fill();
+    };
     mm.clearRect(0, 0, mw, mh);
     mm.fillStyle = 'rgba(10,14,20,0.72)';
     mm.fillRect(0, 0, mw, mh);
@@ -539,37 +573,19 @@ export class Renderer {
     const park = game.city.park;
     mm.fillStyle = '#5d9448';
     mm.fillRect(park.x * sx, park.y * sy, park.w * sx, park.h * sy);
-    // Mission and taxi markers.
+    // Mission, taxi and courier markers.
     const target = game.missions.currentTarget();
-    if (target) {
-      mm.fillStyle = '#ffd23f';
-      mm.beginPath();
-      mm.arc(target.x * sx, target.y * sy, 4, 0, Math.PI * 2);
-      mm.fill();
-    }
+    if (target) blip(target.x, target.y, 4, '#ffd23f');
     const taxi = game.missions.taxi;
     if (taxi) {
       const stop = taxi.stage === 'pickup' ? taxi.pickup : taxi.drop;
-      mm.fillStyle = '#58d068';
-      mm.beginPath();
-      mm.arc(stop.x * sx, stop.y * sy, 4, 0, Math.PI * 2);
-      mm.fill();
+      blip(stop.x, stop.y, 4, '#58d068');
     }
     const courier = game.missions.courier;
-    if (courier) {
-      mm.fillStyle = '#7fd0ff';
-      mm.beginPath();
-      mm.arc(courier.target.x * sx, courier.target.y * sy, 4, 0, Math.PI * 2);
-      mm.fill();
-    }
+    if (courier) blip(courier.target.x, courier.target.y, 4, '#7fd0ff');
     // Police blips in blue.
-    mm.fillStyle = '#4a90ff';
     for (const car of game.traffic.cars) {
-      if (car.police && !car.dead) {
-        mm.beginPath();
-        mm.arc(car.x * sx, car.y * sy, 2.5, 0, Math.PI * 2);
-        mm.fill();
-      }
+      if (car.police && !car.dead) blip(car.x, car.y, 2.5, '#4a90ff');
     }
     // The player, as a white arrow.
     const pl = game.player;
