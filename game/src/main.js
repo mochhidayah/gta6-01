@@ -1,5 +1,10 @@
 // Palmera Bay — game orchestration: the loop, the wanted level, cops,
 // stealing cars, crime and punishment, and saving.
+//
+// The Game owns the world (city, traffic, crowd, missions) and the
+// player's state, and ticks everything once a frame: input, driving
+// or walking, the world simulation, the wanted level, then camera,
+// render and HUD.
 import { SAVE_KEY, ECONOMY, distSq } from './config.js';
 import { City, roadPointNear } from './city.js';
 import { Traffic } from './vehicles.js';
@@ -48,18 +53,27 @@ export class Game {
     this.pistolSpawned = false;
     this.saveData = this.loadSave();
 
-    this.missions.placePackages(this.rng);
-    this.traffic.spawnParked(14);
-    this.traffic.spawn(10, spawn.x, spawn.y);
-    this.crowd.spawn(24, spawn.x, spawn.y);
-    this.missions.storyIndex = this.saveData.missionsDone || 0;
-    this.missions.completed = this.saveData.missionsDone || 0;
-    if (this.saveData.money) this.player.money = this.saveData.money;
-
+    this.populateWorld(spawn);
+    this.restoreProgress();
     this.showStartMenu();
     this.lastT = performance.now();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // Parked cars, moving traffic and pedestrians around the spawn.
+  populateWorld(spawn) {
+    this.missions.placePackages(this.rng);
+    this.traffic.spawnParked(14);
+    this.traffic.spawn(10, spawn.x, spawn.y);
+    this.crowd.spawn(24, spawn.x, spawn.y);
+  }
+
+  // A save file restores missions done and money in pocket.
+  restoreProgress() {
+    this.missions.storyIndex = this.saveData.missionsDone || 0;
+    this.missions.completed = this.saveData.missionsDone || 0;
+    if (this.saveData.money) this.player.money = this.saveData.money;
   }
 
   // ---------- menus ----------
@@ -74,7 +88,7 @@ export class Game {
        <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Six jobs stand between him and freedom.</p>
        <p><b>WASD</b> move / drive &nbsp;·&nbsp; <b>E</b> steal &amp; enter car &nbsp;·&nbsp; <b>Mouse</b> aim, <b>Click</b> shoot &nbsp;·&nbsp; <b>Space</b> punch / handbrake<br>
        <b>M</b> next mission &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>1</b> fists / <b>2</b> pistol</p>
-       <p>Missions, taxi fares, hidden cash stashes, 5-star police chases — and the whole city is yours.</p>
+       <p>Missions, taxi fares, courier runs, hidden cash stashes, 5-star police chases — and the whole city is yours.</p>
        ${hasSave ? `<p>Save found: ${this.saveData.missionsDone} mission(s) done, $${this.saveData.money} in pocket.</p>` : ''}`,
       hasSave ? 'ENTER — continue your story    ·    N — new game' : 'Press ENTER to start',
     );
@@ -169,17 +183,22 @@ export class Game {
       car.siren = true;
       this.sounds.horn();
     }
-    // On-foot cops chase a wanted player who is on foot.
+    this.spawnFootCops(dt);
+  }
+
+  // On-foot cops chase a wanted player who is on foot.
+  spawnFootCops(dt) {
+    const p = this.player;
     this.copTimer -= dt;
-    if (!p.inCar && this.wanted >= 1 && this.copTimer <= 0 && this.cops.length < Math.min(3, this.wanted)) {
-      this.copTimer = 4;
-      const angle = Math.random() * Math.PI * 2;
-      const cop = new Ped(p.x + Math.cos(angle) * 380, p.y + Math.sin(angle) * 380, this.rng);
-      cop.color = '#20242e';
-      cop.speed = 120 + this.wanted * 12;
-      cop.state = 'walk';
-      this.cops.push(cop);
-    }
+    if (p.inCar || this.wanted < 1) return;
+    if (this.copTimer > 0 || this.cops.length >= Math.min(3, this.wanted)) return;
+    this.copTimer = 4;
+    const angle = Math.random() * Math.PI * 2;
+    const cop = new Ped(p.x + Math.cos(angle) * 380, p.y + Math.sin(angle) * 380, this.rng);
+    cop.color = '#20242e';
+    cop.speed = 120 + this.wanted * 12;
+    cop.state = 'stroll';
+    this.cops.push(cop);
   }
 
   updateCops(dt) {
