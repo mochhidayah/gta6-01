@@ -72,6 +72,10 @@ export class HUD {
         ? 'Taxi: pick up the passenger at the marker.'
         : 'Taxi: drop the passenger at the marker.';
     }
+    const courier = game.missions.courier;
+    if (courier) {
+      return `${courier.label}  —  ${Math.ceil(courier.timeLeft)}s left.`;
+    }
     if (game.missions.storyDone) return 'Story complete — free roam: fares, stashes, chaos.';
     return 'No active mission — press M for the next job.';
   }

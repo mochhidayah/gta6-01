@@ -459,6 +459,7 @@ export class Game {
     this.updateWanted(dt);
     this.missions.update(dt);
     this.missions.updateTaxi(dt);
+    this.missions.updateCourier(dt);
     this.missions.checkPackages();
     this.repopulate(dt);
     this.collectPickups();
@@ -511,6 +512,10 @@ export class Game {
     // A taxi driver gets fare offers while cruising empty.
     if (car.taxi && !this.missions.taxi && !this.missions.active && Math.random() < dt * 0.15) {
       this.missions.offerTaxi();
+    }
+    // Any driver cruising with nothing on may get a courier job.
+    if (!this.missions.courier && !this.missions.taxi && !this.missions.active && Math.random() < dt * 0.1) {
+      this.missions.offerCourier();
     }
   }
 

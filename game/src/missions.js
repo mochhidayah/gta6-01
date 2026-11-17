@@ -1,6 +1,7 @@
-// Missions: a six-job story for Marco Solano, plus taxi fares and
-// hidden cash stashes to chase while free-roaming.
+// Missions: a six-job story for Marco Solano, plus taxi fares,
+// courier runs and hidden cash stashes to chase while free-roaming.
 import { distSq } from './config.js';
+import { CourierRun, makeCourierJob } from './courier.js';
 
 export const STORY = [
   {
@@ -72,6 +73,7 @@ export class MissionManager {
     this.storyIndex = 0; // next story mission (0..STORY.length)
     this.active = null; // {def, step, timer, holdT}
     this.taxi = null; // active fare {pickup, drop, stage, pay, timer}
+    this.courier = null; // active courier run (CourierRun) or null
     this.completed = 0;
     this.packagesFound = 0;
     this.packages = []; // hidden cash stashes {x, y, found}
@@ -256,6 +258,41 @@ export class MissionManager {
     if (this.taxi && this.taxi.timer > 120) {
       this.taxi = null;
       g.toast('FARE LOST', 'The passenger gave up waiting.', 4);
+    }
+  }
+
+  // --- Courier runs (side activity) ---
+
+  offerCourier() {
+    const g = this.game;
+    if (this.courier || this.taxi || this.active) return false;
+    if (!g.playerCar) return false;
+    const job = makeCourierJob(Math.random, g.city.landmarks);
+    this.courier = new CourierRun(job);
+    g.toast(
+      'COURIER JOB',
+      `Parcel run: collect at ${this.courier.pickupName}, deliver to ${this.courier.dropName} in ${job.timeLimit}s. Pays $${job.pay}.`,
+      6,
+    );
+    return true;
+  }
+
+  updateCourier(dt) {
+    const g = this.game;
+    if (!this.courier || !g.playerCar) return;
+    const car = g.playerCar;
+    const event = this.courier.update(dt, car.x, car.y);
+    if (event === 'picked') {
+      g.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
+      g.sounds.pickup();
+    } else if (event === 'delivered') {
+      g.player.money += this.courier.pay;
+      g.sounds.cash();
+      g.toast('DELIVERED', `+$${this.courier.pay} — right on time.`, 4);
+      this.courier = null;
+    } else if (event === 'expired') {
+      g.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
+      this.courier = null;
     }
   }
 

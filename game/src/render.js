@@ -285,6 +285,10 @@ export class Renderer {
       const stop = taxi.stage === 'pickup' ? taxi.pickup : taxi.drop;
       beacon(stop.x, stop.y, '#58d068', taxi.stage === 'pickup' ? 'PICKUP' : 'DROP-OFF');
     }
+    const courier = game.missions.courier;
+    if (courier) {
+      beacon(courier.target.x, courier.target.y, '#7fd0ff', courier.label);
+    }
     const step = game.missions.currentStep();
     if (step && step.type === 'rob') {
       const bank = game.city.landmarks.bank;
@@ -549,6 +553,13 @@ export class Renderer {
       mm.fillStyle = '#58d068';
       mm.beginPath();
       mm.arc(stop.x * sx, stop.y * sy, 4, 0, Math.PI * 2);
+      mm.fill();
+    }
+    const courier = game.missions.courier;
+    if (courier) {
+      mm.fillStyle = '#7fd0ff';
+      mm.beginPath();
+      mm.arc(courier.target.x * sx, courier.target.y * sy, 4, 0, Math.PI * 2);
       mm.fill();
     }
     // Police blips in blue.
