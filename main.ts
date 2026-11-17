@@ -36,13 +36,14 @@ if (existsSync(join(here, 'screenshots'))) {
 // no game/ path over 1000 bytes. Palmera Bay's build is deterministic —
 // the city is seeded, so two runs of this program write byte-identical
 // dossier.json files.
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+const dossier = buildDossier(out, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+});
+writeFileSync(join(out, 'dossier.json'), dossier);
+
+// One line on stdout so the build's result is visible in the log.
+console.log(`Palmera Bay handed in: ${dossier.length} bytes of dossier in ${out}`);
