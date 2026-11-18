@@ -7,9 +7,9 @@
 An entry for the [make.fun "Make GTA 6" bounty](https://make.fun/bounty/gta6-01) ($1,666): a complete,
 original open-world crime game that runs offline in a desktop browser from static files.
 
-**Marco Solano** is back in Palmera Bay with $250 and a debt to pay. Six story jobs stand between
+**Marco Solano** is back in Palmera Bay with $250 and a debt to pay. Ten story jobs stand between
 him and freedom — a stolen car, a pickup against the clock, a police chase to outrun, a delivery,
-a bank job, and one last armored-van score — plus taxi fares and hidden cash stashes in free roam.
+a bank job, a night-shift courier rush, a turf war, and one last dockside heist — plus taxi fares and hidden cash stashes in free roam.
 
 ## Play it
 
@@ -27,11 +27,18 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 - **Traffic and pedestrians** — cars follow the road grid, pedestrians stroll the sidewalks and
   flee from chaos; any car can be stolen (press **E**).
 - **Wanted level and police** — crimes raise 0–5 stars; police cars chase and ram, on-foot cops
-  try to bust you. Lose the heat to clear it; getting busted or wasted costs you money.
-- **Missions and story** — six jobs with markers, timers, hold-ups and escapes, each with a payday.
+  try to bust you, and the heat only fades while nobody can see you (line of sight — walls are
+  cover). At 3+ stars roadblocks go up ahead of you; at 4–5 stars a police helicopter circles
+  overhead, its spotlight keeping you visible. Lose the heat to clear it; getting busted or
+  wasted costs you money.
+- **Missions and story** — ten jobs with markers, timers, hold-ups, a turf war and escapes, each with a payday.
+- **More wheels and street life** — a fast, fragile motorcycle and a slow, near-unkillable city
+  bus join the traffic; street vendors sell snacks that restore health ($15), and a taxi that
+  pulls over for you starts a fare when you hop in.
 - **Combat** — fists and a pistol (mouse aim, click to shoot), car damage, smoke and explosions.
-- **HUD with minimap** — health, money, wanted stars, mission objective, speed, weapon, radio
-  station, in-game clock, and a live minimap with mission and police blips.
+- **HUD with minimap** — health, money, wanted stars with a heat bar, a mission objective
+  tracker (title, step, timer), a helicopter-watching alert, speed, weapon, radio station,
+  in-game clock, and a live minimap with mission and police blips.
 - **Sound and music** — everything synthesised live with WebAudio: engine, sirens, gunshots,
   and three radio stations (Sunset FM, Radio Palma, Night Drive). Press **R** to change station.
 - **Save** — progress (missions done, money) persists in localStorage; continue from the menu.
@@ -41,10 +48,11 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 | Key | Action |
 | --- | --- |
 | WASD / arrows | Move / drive |
-| E | Steal & enter car / exit car |
+| E | Steal & enter car / exit car / buy snack at a vendor |
 | Mouse + click | Aim / shoot pistol |
 | Space | Punch (on foot) / handbrake (driving) |
 | Shift | Sprint |
+| H | Honk |
 | M | Next mission |
 | R | Change radio station |
 | 1 / 2 | Fists / pistol |
@@ -53,7 +61,7 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 ## Layout
 
 - `game/` — the game itself: `index.html` and `src/` (one job per file: config, rng, city,
-  vehicles, people, missions, render, hud, input, audio, shots).
+  vehicles, people, missions, police, render, hud, input, audio, shots).
 - `main.ts` — the entry program: copies `game/` and `screenshots/` to `/output` and writes
   `dossier.json` with the vendored make.fun library.
 - `screenshots/` — four real renders of the game running in a browser.

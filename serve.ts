@@ -2,7 +2,7 @@
 //
 // Play the entry locally without a build step:
 //
-//   node serve.ts [--port 8080]
+//   node serve.ts [--port 8080] [--host 127.0.0.1]
 //
 // It serves game/ on http://localhost:8080, sends the MIME types a
 // browser game needs, and refuses any path outside game/. This is a
@@ -47,6 +47,16 @@ function parsePort(argv) {
 
 const port = parsePort(process.argv.slice(2));
 
+// --host binds the server somewhere else (default loopback only);
+// pass 0.0.0.0 to play from another device on your own network.
+function parseHost(argv) {
+  const flag = argv.indexOf('--host');
+  if (flag === -1 || !argv[flag + 1]) return '127.0.0.1';
+  return argv[flag + 1];
+}
+
+const host = parseHost(process.argv.slice(2));
+
 // Resolve a request path to a file inside game/, or null if it escapes.
 function resolveInside(pathname) {
   const file = resolve(join(root, normalize(pathname)));
@@ -88,6 +98,6 @@ createServer((request, response) => {
     'cache-control': 'no-store',
   });
   createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`game/ is on http://localhost:${port}`);
+}).listen(port, host, () => {
+  console.log(`game/ is on http://${host}:${port}`);
 });

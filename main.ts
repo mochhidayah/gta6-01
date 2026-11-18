@@ -9,8 +9,9 @@
 //
 // The game itself is an original top-down open-world crime game: a seeded
 // city to explore on foot and by car, traffic and pedestrians, cars to
-// steal, a wanted level with police who chase, six story missions,
-// courier runs, combat, a HUD with a minimap, synthesised sound and
+// steal, a wanted level with police who chase (plus a helicopter and
+// roadblocks at high heat), ten story missions, courier runs, combat,
+// a HUD with a minimap and an objective tracker, synthesised sound and
 // radio, and a save.
 //
 // Play it locally with `node serve.ts`, then open http://localhost:8080.

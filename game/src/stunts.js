@@ -28,6 +28,8 @@ const RAMP_SPOTS = [
 export class StuntRamps {
   constructor() {
     this.ramps = RAMP_SPOTS.map((s) => ({ ...s, cooldown: 0 }));
+    this.combo = 0; // jumps chained within a few seconds of each other
+    this.lastJumpAt = -99;
   }
 
   // Called every frame while the player drives. Returns nothing; the
@@ -56,7 +58,8 @@ export class StuntRamps {
   }
 
   // The car is in the air: count the flight, lift the body on a
-  // parabola, and pay out when it comes back down.
+  // parabola, and pay out when it comes back down. Jumps chained
+  // within 6 seconds multiply the payout — a combo for show-offs.
   flyAirborne(dt, car, game) {
     car.air.t += dt;
     const done = car.air.t / car.air.total;
@@ -64,11 +67,13 @@ export class StuntRamps {
       const airTime = car.air.total;
       car.air = null;
       car.airHeight = 0;
-      const reward = Math.round(airTime * CASH_PER_SECOND);
+      this.combo = game.elapsed - this.lastJumpAt < 6 ? this.combo + 1 : 1;
+      this.lastJumpAt = game.elapsed;
+      const reward = Math.round(airTime * CASH_PER_SECOND * (1 + 0.5 * (this.combo - 1)));
       game.player.money += reward;
       game.sounds.cash();
       game.addParticles(car.x, car.y, 14, '#ffd23f');
-      game.toast('AIR TIME', `Clean landing — +$${reward}.`, 3);
+      game.toast('AIR TIME', this.combo > 1 ? `Clean landing — +$${reward} (combo x${this.combo})!` : `Clean landing — +$${reward}.`, 3);
       return;
     }
     // Parabola: 0 at take-off and landing, peak in the middle.

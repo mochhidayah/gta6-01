@@ -6,6 +6,7 @@
 // there, but not to sightsee on the way. The run is a small state
 // machine: pickup, then deliver, then done or expired.
 import { distSq } from './config.js';
+import { shuffle } from './rng.js';
 
 const MARKER_RADIUS = 80;
 const MIN_TIME = 45; // seconds, even for a trip across the street
@@ -14,9 +15,9 @@ const MAX_TIME = 150; // seconds, even for a trip across the city
 // Pick two different landmarks and price the job from the distance
 // between them. Returns {pickup, drop, pickupName, dropName, pay, timeLimit}.
 export function makeCourierJob(rng, landmarks) {
-  const names = Object.keys(landmarks);
-  const pickupName = names[Math.floor(rng() * names.length)];
-  let dropName = names[Math.floor(rng() * names.length)];
+  const names = shuffle(rng, Object.keys(landmarks));
+  const pickupName = names[0];
+  let dropName = names[1];
   if (dropName === pickupName) {
     const next = (names.indexOf(pickupName) + 4) % names.length;
     dropName = names[next];
@@ -60,6 +61,15 @@ export class CourierRun {
   get timeLeft() {
     const left = this.timeLimit - this.elapsed;
     return left > 0 ? left : 0;
+  }
+
+  // A fast delivery pays a speed bonus: half the time left, in
+  // dollars, when more than half the clock is still on it.
+  get speedBonus() {
+    if (this.stage !== 'done') return 0;
+    const left = this.timeLeft;
+    if (left < this.timeLimit / 2) return 0;
+    return Math.round(left / 2);
   }
 
   get label() {

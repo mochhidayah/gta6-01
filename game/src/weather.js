@@ -18,6 +18,8 @@ export class Weather {
     this.state = 'clear'; // clear | rain
     this.timer = CLEAR_MIN + Math.random() * (CLEAR_MAX - CLEAR_MIN);
     this.intensity = 0; // 0 = dry, 1 = full downpour; ramps smoothly
+    this.flash = 0; // lightning flash, fading out (0..1)
+    this.flashTimer = 0;
     this.drops = [];
     for (let i = 0; i < DROP_COUNT; i++) {
       this.drops.push({ x: Math.random(), y: Math.random(), speed: 900 + Math.random() * 500 });
@@ -38,6 +40,16 @@ export class Weather {
       if (drop.y > 1) {
         drop.y = -0.05;
         drop.x = Math.random();
+      }
+    }
+    // Lightning during a downpour: a rare flash, then a fast fade.
+    if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 3);
+    if (this.state === 'rain') {
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0) {
+        this.flashTimer = 6 + Math.random() * 14;
+        this.flash = 0.55 + Math.random() * 0.3;
+        game.sounds.thunder();
       }
     }
   }
@@ -65,8 +77,15 @@ export class Weather {
   }
 
   // Paint the rain over the viewport: diagonal streaks whose opacity
-  // follows the intensity, plus a dark tint while it pours.
+  // follows the intensity, plus a dark tint while it pours — and a
+  // lightning flash, fading fast, when the sky cracks.
   draw(ctx, view) {
+    if (this.flash > 0) {
+      ctx.save();
+      ctx.fillStyle = `rgba(230, 240, 255, ${this.flash * 0.35})`;
+      ctx.fillRect(view.x, view.y, view.w, view.h);
+      ctx.restore();
+    }
     if (this.intensity <= 0.01) return;
     ctx.save();
     ctx.fillStyle = `rgba(20, 30, 60, ${0.12 * this.intensity})`;

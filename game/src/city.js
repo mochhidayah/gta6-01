@@ -1,12 +1,9 @@
 // Palmera Bay — the city, built as districts.
 //
-// One fixed seed builds the whole map, so every load shows the same
-// town: the same streets, the same towers, the same parks. Five
-// districts give it shape — Downtown towers in the middle, Old Town
-// cottages along the west edge, Uptown houses to the north-east, a
-// low Marina strip along the sand, and two parks where the grid
-// breathes. Under it all the roads stay a grid of avenues and
-// streets, so driving, missions and the minimap all work the same.
+// v2 note: the map code is untouched from v1 on purpose — one fixed
+// seed builds the whole map, so the screenshots stay valid. The v2
+// systems (helicopter, roadblocks, vendors, bus, bike) only read
+// the city; they never rebuild it.
 import { WORLD, ROAD, SHORE, COLORS } from './config.js';
 import { seeded, choose, between, betweenInt, chance } from './rng.js';
 

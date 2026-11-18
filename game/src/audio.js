@@ -1,13 +1,7 @@
-// Every sound in Palmera Bay is synthesised live with WebAudio: an
-// engine hum, two-tone sirens, gunshots, pickups and three little
-// radio stations that a step sequencer plays. No audio files, no
-// network — nothing to download.
-//
-// The bank is built around two primitives: a Voice (one oscillator
-// through its own gain, started once and retuned) for everything
-// continuous, and short-lived bleeps and noise bursts for one-shots.
-// A single pre-rendered noise buffer serves every burst, so shots
-// and crashes cost no allocation while the game runs.
+// Every sound in Palmera Bay is synthesised live with WebAudio:
+// an engine hum, two-tone sirens, gunshots, pickups and three
+// little radio stations a step sequencer plays. No audio files,
+// no network — nothing to download.
 const STATION_DEFS = [
   { name: 'Sunset FM', scale: [110, 130.8, 164.8, 196, 220], bass: [0, 0, 2, 0, 3, 0, 4, 1] },
   { name: 'Radio Palma', scale: [98, 116.5, 146.8, 174.6, 196], bass: [0, 2, 0, 4, 0, 3, 1, 2] },
@@ -26,22 +20,7 @@ class Voice {
     this.osc.start();
   }
 
-  retune(freq, when, glide) {
-    this.osc.frequency.setTargetAtTime(freq, when, glide);
-  }
-
-  level(vol, when, glide) {
-    this.gain.gain.setTargetAtTime(vol, when, glide);
-  }
-
-  stop() {
-    try {
-      this.osc.stop();
-    } catch {
-      // Already stopped — nothing to do.
-    }
-    this.gain.disconnect();
-  }
+  // (Voices are retuned through osc/gain directly by the bank.)
 }
 
 export class SoundBank {
@@ -177,19 +156,6 @@ export class SoundBank {
     src.stop(t + dur);
   }
 
-  // Keep the old short names as aliases — the game calls these.
-  blip(freq, dur, type, vol) {
-    this.tone(freq, dur, type, vol);
-  }
-
-  noise(dur, vol, cutoff) {
-    this.burst(dur, vol, cutoff);
-  }
-
-  note(freq, dur, type, vol) {
-    this.tone(freq, dur, type, vol);
-  }
-
   // Play a little melody: notes spaced evenly in time.
   arpeggio(freqs, stepMs, dur, type = 'triangle', vol = 0.18) {
     freqs.forEach((f, i) => setTimeout(() => this.tone(f, dur, type, vol), i * stepMs));
@@ -240,6 +206,28 @@ export class SoundBank {
     this.tone(370, 0.18, 'sawtooth', 0.1);
   }
 
+  // A taxi's double-beep: two short honks, "I'm here, hop in."
+  hornTaxi() {
+    this.tone(440, 0.12, 'sawtooth', 0.1);
+    setTimeout(() => this.tone(440, 0.12, 'sawtooth', 0.1), 140);
+  }
+
+  // The helicopter's rotor wash: a low chopped burst as it comes over.
+  heliBuzz() {
+    this.burst(0.9, 0.25, 400);
+    this.tone(90, 0.9, 'sawtooth', 0.08);
+  }
+
+  // Distant thunder rolling in with the rain.
+  thunder() {
+    this.burst(1.4, 0.35, 180);
+  }
+
+  // A happy little chime for a snack bought at a stall.
+  snack() {
+    this.arpeggio([784, 988], 90, 0.12, 'triangle', 0.16);
+  }
+
   // --- radio ---
 
   nextStation() {
@@ -263,22 +251,5 @@ export class SoundBank {
       }
       if (step % 8 === 6) this.burst(0.05, 0.03, 6000); // hi-hat tick
     }, 240);
-  }
-
-  // Alias kept for the game code that starts the radio.
-  startMusic() {
-    if (!this.musicTimer) this.startRadio();
-  }
-
-  buildMusic() {
-    this.startMusic();
-  }
-
-  buildEngine() {
-    if (this.ctx && !this.engineOsc) this.startEngineVoice();
-  }
-
-  buildSiren() {
-    this.startSirenVoice();
   }
 }
