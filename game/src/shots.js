@@ -44,7 +44,7 @@ const SCENES = {
       const police = game.traffic.spawnPolice(x + (i - 1) * 130, y - 300 - i * 60, Math.PI / 2);
       police.speed = 300;
     }
-    game.police.forceHeli(x + 120, y - 220);
+    game.police.forceHeli(x - 320, y - 180);
     game.police.watched = true;
     setMission(game, 4, 2);
     frameCamera(game, x, y - 40);
