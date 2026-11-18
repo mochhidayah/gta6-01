@@ -1,14 +1,9 @@
-// Rival gangs: the Sharks and the Vipers hold corners of Palmera Bay,
-// and they do not like Marco Solano.
-//
-// A gang member is a pedestrian with a crew colour and a temper. Left
-// alone they loiter on their turf, but when the player gets close —
-// especially with heat on them — they close in and swing. Knocking
-// one down pays a little cash and a little heat, like any other fight,
-// and scares the rest of the crew off for a while.
-//
-// Gang members live apart from the crowd: they spawn on turf, never
-// despawn by distance, and the game caps how many can be out at once.
+// Rival gangs: the Sharks and the Vipers hold corners of Palmera Bay.
+// A member is a pedestrian with a crew colour and a temper: left
+// alone they loiter on turf, close in and swing when the player gets
+// near — especially with heat on. Knocking one down pays a little
+// cash and heat, and scares the crew off. Missions can muster a
+// named crew at a spot (the Turf War calls the Sharks to the stadium).
 import { distSq } from './config.js';
 import { Ped } from './people.js';
 
@@ -21,7 +16,11 @@ const AGGRO_RANGE = 320;
 const ATTACK_RANGE = 28;
 const ATTACK_DAMAGE = 8;
 const ATTACK_COOLDOWN = 1.1;
-const MAX_MEMBERS = 6;
+const MAX_MEMBERS = 10;
+
+export function crewByName(name) {
+  return CREWS.find((c) => c.name === name) || CREWS[0];
+}
 
 export class GangMember extends Ped {
   constructor(x, y, rng, crew) {
@@ -33,14 +32,14 @@ export class GangMember extends Ped {
     this.state = 'stroll';
   }
 
-  // A gang member chases the player when close and the heat is on,
-  // or when the player has already swung at their crew.
+  // Chases when close and provoked (heat, pistol, or a turf-war mission).
   update(dt, game, rng) {
     if (this.state === 'down') return;
     if (this.attackTimer > 0) this.attackTimer -= dt;
     const p = game.player;
     const near = distSq(this.x, this.y, p.x, p.y) < AGGRO_RANGE * AGGRO_RANGE;
-    const provoked = game.wanted > 0 || p.weapon === 'pistol';
+    const warOn = game.missions.active && game.missions.active.def.id === 'm9';
+    const provoked = game.wanted > 0 || p.weapon === 'pistol' || warOn;
     if (near && provoked && !p.inCar) {
       this.chasePlayer(dt, game);
       return;
@@ -86,7 +85,6 @@ export class Gangs {
     this.rngState = 987654321;
   }
 
-  // Cheap deterministic roll, so spawns do not touch the shared rng.
   roll() {
     this.rngState = (this.rngState * 1103515245 + 12345) % 2147483648;
     return this.rngState / 2147483648;
@@ -103,6 +101,20 @@ export class Gangs {
     }
   }
 
+  spawnCrew(crewName, count, x, y) {
+    const crew = crewByName(crewName);
+    for (let i = 0; i < count && this.members.length < MAX_MEMBERS; i++) {
+      const member = new GangMember(
+        x + (this.roll() - 0.5) * 320,
+        y + (this.roll() - 0.5) * 320,
+        () => this.roll(),
+        crew,
+      );
+      this.members.push(member);
+    }
+    return this.members.filter((m) => m.crew.name === crewName);
+  }
+
   update(dt, game, rng) {
     for (const member of this.members) member.update(dt, game, rng);
     const px = game.player.x;
@@ -113,7 +125,6 @@ export class Gangs {
     });
   }
 
-  // The crew scatters when one of theirs goes down in front of them.
   scatterNear(x, y, radius) {
     for (const member of this.members) {
       if (member.state === 'down') continue;

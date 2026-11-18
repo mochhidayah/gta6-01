@@ -1,5 +1,7 @@
-// Missions: a seven-job story for Marco Solano, plus taxi fares,
-// courier runs and hidden cash stashes to chase while free-roaming.
+// Missions: Marco's ten-job story, plus taxi fares, courier runs
+// and hidden cash stashes. A mission is a list of steps; each step
+// has one handler in the table below, and the manager advances,
+// fails or completes the mission as the steps resolve.
 import { distSq } from './config.js';
 import { CourierRun, makeCourierJob } from './courier.js';
 
@@ -50,7 +52,7 @@ export const STORY = [
     brief: 'Palmera Reserve Bank, midday. Grab the cash, then outrun a 4-star response.',
     steps: [
       { type: 'goto', place: 'bank', text: 'Reach Palmera Reserve Bank', radius: 85 },
-      { type: 'rob', text: 'Hold up the bank — stay inside the marker 6 seconds', hold: 6 },
+      { type: 'rob', place: 'bank', text: 'Hold up the bank — stay inside the marker 6 seconds', hold: 6 },
       { type: 'escape', stars: 4, text: 'Escape! Lose the 4-star wanted level', radius: 0 },
     ],
   },
@@ -76,9 +78,42 @@ export const STORY = [
       { type: 'escape', stars: 3, text: 'Escape! Lose the 3-star wanted level', radius: 0 },
     ],
   },
+  {
+    id: 'm8',
+    title: 'Night Shift',
+    pay: 950,
+    brief: 'Four pickups, one night, no excuses. Lucia runs a courier ring after dark and Marco is the wheelman — marina, airfield, docks, club, against the clock.',
+    steps: [
+      { type: 'goto', place: 'marina', text: 'Stop 1 of 4: collect at Coral Marina', radius: 80, timer: 60 },
+      { type: 'goto', place: 'airport', text: 'Stop 2 of 4: drop at Palmera Airfield', radius: 85, timer: 60 },
+      { type: 'goto', place: 'docks', text: 'Stop 3 of 4: collect at the South Docks', radius: 85, timer: 60 },
+      { type: 'goto', place: 'club', text: 'Stop 4 of 4: final drop at Club Flamingo', radius: 90, timer: 60 },
+    ],
+  },
+  {
+    id: 'm9',
+    title: 'Turf War',
+    pay: 1600,
+    brief: 'The Sharks jumped a Viper runner on stadium turf. The Vipers want payback and Marco owes them — put six Sharks on the ground, then get out before the precinct arrives.',    steps: [
+      { type: 'goto', place: 'stadium', text: 'Get to Bay Sharks Stadium — the fight is on', radius: 95 },
+      { type: 'defeat', crew: 'Sharks', count: 6, text: 'Drop 6 Sharks (fists or pistol — your call)' },
+      { type: 'escape', stars: 3, text: 'Escape! Lose the 3-star wanted level', radius: 0 },
+    ],
+  },
+  {
+    id: 'm10',
+    title: 'The Last Debt',
+    pay: 3500,
+    brief: 'The finale. The man Marco owes keeps his ledger in the docks warehouse. Lift a Midnight Van, pick up the crew at the marina, crack the warehouse hold, and walk out of a 4-star storm with the ledger.',
+    steps: [
+      { type: 'stealModel', model: 'Midnight Van', text: 'Steal a Midnight Van for the crew' },
+      { type: 'goto', place: 'marina', text: 'Pick up the crew at Coral Marina', radius: 85 },
+      { type: 'rob', place: 'docks', text: 'Crack the warehouse hold — stay inside the marker 8 seconds', hold: 8 },
+      { type: 'escape', stars: 4, text: 'Escape! Lose the 4-star wanted level', radius: 0 },
+    ],
+  },
 ];
 
-// Where Marco is right now, in the car or on foot.
 function positionOf(game) {
   const p = game.player;
   if (p.inCar && game.playerCar) return { x: game.playerCar.x, y: game.playerCar.y };
@@ -89,17 +124,26 @@ function within(x, y, target, radius) {
   return distSq(x, y, target.x, target.y) < radius * radius;
 }
 
+function downCount(game, crewName) {
+  let n = 0;
+  for (const m of game.gangs.members) {
+    if (m.crew.name === crewName && m.state === 'down') n += 1;
+  }
+  return n;
+}
+
 export class MissionManager {
   constructor(game) {
     this.game = game;
     this.storyIndex = 0; // next story mission (0..STORY.length)
-    this.active = null; // {def, step, timer, holdT}
+    this.active = null; // {def, step, timer, holdT, defeatBase}
     this.taxi = null; // active fare {pickup, drop, stage, pay, timer}
     this.courier = null; // active courier run (CourierRun) or null
     this.completed = 0;
     this.packagesFound = 0;
     this.packages = []; // hidden cash stashes {x, y, found}
     this.vanReady = false; // the m6 armored van has been parked at the stadium
+    this.warReady = false; // the m9 Sharks have been mustered at the stadium
   }
 
   get storyDone() {
@@ -109,12 +153,20 @@ export class MissionManager {
   startStory() {
     if (this.storyDone) return false;
     const def = STORY[this.storyIndex];
-    this.active = { def, step: 0, timer: 0, holdT: 0 };
+    this.active = { def, step: 0, timer: 0, holdT: 0, defeatBase: 0 };
     if (def.id === 'm6' && !this.vanReady) {
-      // Park the armored van at the stadium before the job begins.
       const spot = this.game.city.landmarks.stadium;
       this.game.traffic.spawnVan(spot.x + 60, spot.y + 30);
       this.vanReady = true;
+    }
+    if (def.id === 'm9' && !this.warReady) {
+      const spot = this.game.city.landmarks.stadium;
+      this.game.gangs.spawnCrew('Sharks', 6, spot.x, spot.y);
+      this.warReady = true;
+    }
+    if (def.id === 'm10') {
+      const spot = this.game.city.landmarks.garage;
+      this.game.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
     }
     this.announce(def);
     return true;
@@ -151,7 +203,6 @@ export class MissionManager {
     g.sounds.missionDone();
     g.sounds.cash();
     g.toast('MISSION COMPLETE', `${def.title} — earned $${def.pay}`, 6);
-    g.addCash(0, g.player.x, g.player.y);
     this.completed += 1;
     this.storyIndex += 1;
     this.active = null;
@@ -173,13 +224,15 @@ export class MissionManager {
       this.complete();
       return;
     }
-    this.game.toast('NEW OBJECTIVE', this.currentStep().text, 5);
+    const step = this.currentStep();
+    if (step.type === 'defeat') {
+      this.active.defeatBase = downCount(this.game, step.crew);
+    }
+    this.game.toast('NEW OBJECTIVE', step.text, 5);
   }
 
-  // One frame of the active story step. Each step type has its own
-  // handler below; the timer runs for every step that carries one.
+  // One frame of the active story step; the timer runs for steps that carry one.
   update(dt) {
-    const g = this.game;
     if (!this.active) return;
     const step = this.currentStep();
     if (!step) return;
@@ -194,7 +247,6 @@ export class MissionManager {
     if (handler) handler.call(this, dt, step);
   }
 
-  // Dispatch table: one method per step type.
   get stepHandlers() {
     return {
       goto: this.stepGoto,
@@ -205,6 +257,7 @@ export class MissionManager {
       loseCops: this.stepLoseCops,
       rob: this.stepRob,
       escape: this.stepEscape,
+      defeat: this.stepDefeat,
     };
   }
 
@@ -235,29 +288,43 @@ export class MissionManager {
 
   stepLoseCops() {
     const g = this.game;
-    if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
+    if (g.wanted === 0 && g.cops.length === 0 && g.police.policeCars() === 0) this.nextStep();
   }
 
+  // Hold inside a ring to crack a target (bank, or the docks warehouse).
   stepRob(dt, step) {
     const g = this.game;
     const pos = positionOf(g);
-    const bank = g.city.landmarks.bank;
-    if (!within(pos.x, pos.y, bank, 100)) {
+    const site = g.city.landmarks[step.place || 'bank'];
+    if (!within(pos.x, pos.y, site, 100)) {
       this.active.holdT = 0;
       return;
     }
     this.active.holdT += dt;
     if (this.active.holdT < step.hold) return;
-    g.player.money += 800;
-    g.addCrime(3, 'Bank robbed! $800 grabbed — the whole precinct is coming.');
+    const take = step.place === 'docks' ? 1500 : 800;
+    g.player.money += take;
+    g.police.addCrime(3, step.place === 'docks'
+      ? 'Warehouse cracked! $1,500 grabbed — the whole precinct is coming.'
+      : 'Bank robbed! $800 grabbed — the whole precinct is coming.');
     g.sounds.cash();
     this.nextStep();
   }
 
   stepEscape(dt, step) {
     const g = this.game;
-    g.setWanted(Math.max(g.wanted, step.stars));
-    if (g.wanted === 0 && g.cops.length === 0 && g.policeCars() === 0) this.nextStep();
+    g.police.setWanted(Math.max(g.wanted, step.stars));
+    if (g.wanted === 0 && g.cops.length === 0 && g.police.policeCars() === 0) this.nextStep();
+  }
+
+  // Count how many of the named crew are down since this step began.
+  stepDefeat(dt, step) {
+    const g = this.game;
+    const dropped = downCount(g, step.crew) - this.active.defeatBase;
+    if (dropped >= step.count) {
+      g.toast('TURF TAKEN', `The ${step.crew} are down — now get out of there.`, 4);
+      this.nextStep();
+    }
   }
 
   // --- Taxi fares (side activity) ---
@@ -324,9 +391,10 @@ export class MissionManager {
       g.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
       g.sounds.pickup();
     } else if (event === 'delivered') {
-      g.player.money += this.courier.pay;
+      const bonus = this.courier.speedBonus;
+      g.player.money += this.courier.pay + bonus;
       g.sounds.cash();
-      g.toast('DELIVERED', `+$${this.courier.pay} — right on time.`, 4);
+      g.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
       this.courier = null;
     } else if (event === 'expired') {
       g.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
