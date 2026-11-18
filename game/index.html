@@ -13,7 +13,12 @@
   #hud { position: absolute; inset: 0; display: none; color: #fff; pointer-events: none; }
   .panel { background: rgba(8, 10, 18, 0.62); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; backdrop-filter: blur(2px); }
   #objective { position: absolute; top: 14px; left: 14px; max-width: 460px; padding: 10px 14px; font-size: 15px; font-weight: 600; line-height: 1.35; }
-  #objective::before { content: '◆ MISSION  '; color: #ffd23f; font-size: 12px; }
+  #objective-title { color: #ffd23f; font-size: 13px; letter-spacing: 0.5px; }
+  #objective-step { margin-top: 2px; }
+  #objective-timer { margin-top: 2px; font-size: 13px; color: #9fd8ff; font-weight: 800; }
+  #heat-wrap { width: 190px; height: 6px; margin-top: 6px; margin-left: auto; overflow: hidden; background: rgba(0,0,0,0.55); border-radius: 3px; display: none; }
+  #heat-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #f2c230, #e33f2f); transition: width 0.2s; }
+  #heli-alert { margin-top: 6px; font-size: 12px; font-weight: 800; color: #ff6b6b; display: none; animation: pulse 1s infinite; }
   #top-right { position: absolute; top: 14px; right: 14px; padding: 10px 14px; text-align: right; }
   #money { font-size: 26px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 4px rgba(0,0,0,0.7); }
   #stars { font-size: 22px; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
@@ -44,10 +49,12 @@
 <div id="wrap">
   <canvas id="game" width="1280" height="800"></canvas>
   <div id="hud">
-    <div id="objective" class="panel"></div>
+    <div id="objective" class="panel"><div id="objective-title">◆ PALMERA BAY</div><div id="objective-step">Press M for the next job.</div><div id="objective-timer"></div></div>
     <div id="top-right" class="panel">
       <div id="money">$250</div>
       <div id="stars">☆☆☆☆☆</div>
+      <div id="heat-wrap"><div id="heat-fill"></div></div>
+      <div id="heli-alert"></div>
       <div id="clock">17:00</div>
       <div id="health-bar"><div id="health-fill"></div></div>
       <div id="health-num">100 HP</div>

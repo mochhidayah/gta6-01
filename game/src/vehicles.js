@@ -1,38 +1,29 @@
-// Vehicles: arcade driving physics, traffic that follows routes around
-// the road grid, patrol cruisers looping downtown, and police cars that
-// chase the player when the heat is on.
-//
-// Traffic no longer wanders and turns at random. Every traffic car
-// gets a route when it spawns — a loop of waypoints along avenues and
-// streets — and drives from one waypoint to the next, braking for the
-// car ahead and re-planning if it ever leaves the road. Patrol cars
-// run the same routes faster, looping the downtown grid.
-import { WORLD, CAR_STATS, CAR_CATALOG, ARMORED_VAN, clamp, turnToward, wrapAngle, distSq } from './config.js';
+// Vehicles: arcade driving, route-following traffic, patrol
+// cruisers, police chases, and the two new rides — a motorcycle
+// (fast, fragile) and a city bus (slow, nearly unkillable).
+// Traffic follows waypoint loops on the road grid; police cars
+// steer at Marco and ram.
+import { WORLD, CAR_STATS, CAR_CATALOG, ARMORED_VAN, clamp, wrapAngle, distSq } from './config.js';
 import { AVENUES, STREETS, onRoad, roadPointNear } from './city.js';
 import { seeded, choose, between } from './rng.js';
 
 let nextCarId = 1;
 
-// Build a loop of waypoints on the grid: alternate avenues and streets
-// so the route reads like a drive around a few blocks.
+// A loop of waypoints on the grid: alternate avenues and streets.
 function planRoute(rng, startX, startY) {
   const points = [{ x: startX, y: startY }];
   let x = startX;
   let y = startY;
   const legs = 4 + Math.floor(rng() * 4);
   for (let i = 0; i < legs; i++) {
-    if (i % 2 === 0) {
-      x = choose(rng, AVENUES);
-    } else {
-      y = choose(rng, STREETS);
-    }
+    if (i % 2 === 0) x = choose(rng, AVENUES);
+    else y = choose(rng, STREETS);
     points.push({ x, y });
   }
   points.push({ x: startX, y: startY });
   return points;
 }
 
-// A random heading that runs along the grid (north/south/east/west).
 function gridHeading(rng, alongAvenue) {
   if (alongAvenue) return rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
   return rng() < 0.5 ? 0 : Math.PI;
@@ -44,25 +35,30 @@ export class Car {
     this.x = x;
     this.y = y;
     this.angle = angle;
-    // A custom model (the armored van) bypasses the catalogue.
+    // A custom model (armored van, or a named model for a job) bypasses the catalogue.
     this.model = opts.model || CAR_CATALOG[modelIndex % CAR_CATALOG.length];
     this.speed = 0;
     this.color = opts.color || this.model.color;
     this.police = !!opts.police;
     this.taxi = !!this.model.taxi;
     this.van = !!this.model.van;
+    this.bike = !!this.model.bike; // motorcycle: fast, fragile, rider exposed
+    this.bus = !!this.model.bus; // city bus: slow, long, hard to kill
     this.patrol = !!opts.patrol;
-    this.w = 44; // footprint: length x width
-    this.h = 22;
-    this.health = 100;
+    this.w = this.bus ? 64 : this.bike ? 34 : 44;
+    this.h = this.bus ? 26 : this.bike ? 12 : 22;
+    this.health = this.bus ? 220 : this.bike ? 50 : 100;
+    this.maxHealth = this.health;
     this.dead = false;
     this.smoke = 0;
-    this.driver = opts.driver ?? null; // 'traffic' | 'patrol' | 'police' | 'parked' | null (player)
+    this.driver = opts.driver ?? null; // 'traffic' | 'patrol' | 'police' | 'roadblock' | 'taxiWait' | 'parked' | null (player)
     this.brain = null; // traffic AI state: {route, leg, cruise}
     this.siren = this.police;
     this.skid = 0;
     this.stuckTimer = 0;
     this.crashCooldown = 0;
+    this.hailed = false; // a taxi that has pulled over for Marco
+    this.honkTimer = 0;
   }
 
   get topSpeed() {
@@ -70,10 +66,12 @@ export class Car {
   }
 
   // Arcade driving: speed builds with the throttle, steering bites
-  // harder the faster you go, and the handbrake kills grip for slides.
+  // harder the faster you go, and the handbrake kills grip.
+  // A bike turns sharper; a bus turns like a bus.
   drive(throttle, steer, handbrake, dt) {
     this.applyThrottle(throttle, handbrake, dt);
-    this.applySteering(steer, handbrake, dt);
+    const steerScale = this.bike ? 1.5 : this.bus ? 0.55 : 1;
+    this.applySteering(steer * steerScale, handbrake, dt);
     this.x += Math.cos(this.angle) * this.speed * dt;
     this.y += Math.sin(this.angle) * this.speed * dt;
     this.x = clamp(this.x, 30, WORLD.width - 30);
@@ -103,7 +101,8 @@ export class Car {
   }
 
   damage(amount, game) {
-    this.health -= amount;
+    // The rider is exposed: a bike takes half again as much damage.
+    this.health -= this.bike ? amount * 1.5 : amount;
     if (this.health < 30) this.smoke = 1;
     if (this.health <= 0 && !this.dead) {
       this.dead = true;
@@ -111,20 +110,22 @@ export class Car {
     }
   }
 
-  // Cars are circles of r=20 for each other: push apart and trade speed.
+  // Cars are circles for each other: push apart and trade speed.
+  // A bus shoves lighter cars aside instead of sharing the hit.
   collideWith(other) {
     const dx = other.x - this.x;
     const dy = other.y - this.y;
     const d = Math.hypot(dx, dy);
-    const minDist = 34;
+    const minDist = this.bus || other.bus ? 44 : this.bike || other.bike ? 28 : 34;
     if (d <= 0.01 || d >= minDist) return 0;
     const push = (minDist - d) / 2;
     const nx = dx / d;
     const ny = dy / d;
-    this.x -= nx * push;
-    this.y -= ny * push;
-    other.x += nx * push;
-    other.y += ny * push;
+    const myShare = this.bus ? 0.15 : other.bus ? 0.85 : 0.5;
+    this.x -= nx * push * (1 - myShare) * 2;
+    this.y -= ny * push * (1 - myShare) * 2;
+    other.x += nx * push * myShare * 2;
+    other.y += ny * push * myShare * 2;
     const shared = (this.speed + other.speed) / 2;
     this.speed = shared * 0.4;
     other.speed = shared * 0.4;
@@ -169,14 +170,20 @@ export class Traffic {
     return car;
   }
 
-  // The armored van for the final job, parked at the stadium.
   spawnVan(x, y) {
     const van = new Car(x, y, 0, 0, { driver: 'parked', model: ARMORED_VAN, color: ARMORED_VAN.color });
     this.cars.push(van);
     return van;
   }
 
-  // A patrol cruiser on a fixed downtown loop.
+  // Park one car of a named model at a spot — a mission's ride.
+  spawnModel(modelName, x, y) {
+    const model = CAR_CATALOG.find((m) => m.name === modelName) || CAR_CATALOG[0];
+    const car = new Car(x, y, 0, 0, { driver: 'parked', model });
+    this.cars.push(car);
+    return car;
+  }
+
   spawnPatrol(x, y) {
     const p = roadPointNear(x, y);
     const car = new Car(p.x, p.y, gridHeading(this.rng, true), 4, {
@@ -186,6 +193,19 @@ export class Traffic {
     });
     car.speed = 150;
     car.brain = { route: planRoute(this.rng, p.x, p.y), leg: 1, cruise: 190 };
+    this.cars.push(car);
+    return car;
+  }
+
+  // A taxi waiting for a fare: sits by the road until Marco walks up, then honks.
+  spawnHailedTaxi(x, y) {
+    const p = roadPointNear(x, y);
+    const taxiModel = CAR_CATALOG.find((m) => m.taxi) || CAR_CATALOG[2];
+    const car = new Car(p.x, p.y, gridHeading(this.rng, true), 0, {
+      driver: 'taxiWait',
+      model: taxiModel,
+    });
+    car.speed = 0;
     this.cars.push(car);
     return car;
   }
@@ -213,7 +233,7 @@ export class Traffic {
       if (car.crashCooldown > 0) car.crashCooldown -= dt;
       if (car.driver === 'traffic' || car.driver === 'patrol') this.followRoute(car, dt, game);
       else if (car.driver === 'police') this.chasePlayer(car, dt, game);
-      // Parked cars never move; the city keeps them out of buildings.
+      else if (car.driver === 'taxiWait') this.waitForFare(car, dt, game);
       const push = this.city.collideCircle(car.x, car.y, 20);
       if (push) {
         car.x += push.x;
@@ -222,7 +242,6 @@ export class Traffic {
       }
       if (car.smoke > 0) car.smoke = Math.max(0, car.smoke - dt * 0.15);
     }
-    // Car-vs-car collisions.
     for (let i = 0; i < this.cars.length; i++) {
       for (let j = i + 1; j < this.cars.length; j++) {
         const a = this.cars[i];
@@ -232,16 +251,35 @@ export class Traffic {
         if (impact > 60 && game) game.onCarCrash(a, b, impact);
       }
     }
-    // Cull traffic far from the player; parked cars and police stay.
+    // Cull far traffic; parked cars, police, roadblocks, waiting taxis stay.
     this.cars = this.cars.filter((car) => {
-      if (car.driver === 'police') return !car.dead;
+      if (car.driver === 'police' || car.driver === 'roadblock') return !car.dead;
       if (car === game.playerCar) return true;
-      if (car.driver === 'parked') return true;
+      if (car.driver === 'parked' || car.driver === 'taxiWait') return true;
       return distSq(car.x, car.y, player.x, player.y) < 1600 * 1600;
     });
   }
 
-  // Is there a car right ahead of this one, in its driving direction?
+  // A waiting taxi watches for Marco on foot: honk, flag him in, fare starts on entry.
+  waitForFare(car, dt, game) {
+    const p = game.player;
+    if (car.honkTimer > 0) car.honkTimer -= dt;
+    if (p.inCar) return;
+    const d = Math.hypot(p.x - car.x, p.y - car.y);
+    if (d > 170) {
+      car.hailed = false;
+      return;
+    }
+    if (!car.hailed) {
+      car.hailed = true;
+      game.toast('TAXI!', 'A cab pulled over for you — press E to hop in and start a fare.', 4);
+    }
+    if (car.honkTimer <= 0) {
+      car.honkTimer = 2.5;
+      game.sounds.hornTaxi();
+    }
+  }
+
   carAhead(car) {
     for (const other of this.cars) {
       if (other === car || other.dead) continue;
@@ -255,8 +293,8 @@ export class Traffic {
     return false;
   }
 
-  // Drive the car's route: steer at the next waypoint, advance when
-  // close, and re-plan if the car ever ends up off the road.
+  // Drive the route: steer at the next waypoint, advance when close,
+  // re-plan if the car ever ends up off the road.
   followRoute(car, dt, game) {
     if (!car.brain) {
       car.brain = { route: planRoute(this.rng, car.x, car.y), leg: 1, cruise: 150 };
@@ -277,20 +315,17 @@ export class Traffic {
     const blocked = this.carAhead(car);
     const cruise = blocked ? 0 : brain.cruise;
     car.drive(car.speed < cruise ? 0.7 : 0, steer, false, dt);
-    // Off the road entirely: scrap the route and plan a fresh one.
     const aheadX = car.x + Math.cos(car.angle) * 60;
     const aheadY = car.y + Math.sin(car.angle) * 60;
     if (!onRoad(aheadX, aheadY) && !onRoad(car.x, car.y)) {
       brain.route = planRoute(this.rng, car.x, car.y);
       brain.leg = 1;
     }
-    // A frightened driver floors it when the player causes chaos nearby.
     if (game.wanted > 0 && distSq(car.x, car.y, game.player.x, game.player.y) < 220 * 220) {
       car.drive(1, 0, false, dt);
     }
   }
 
-  // A police car steers at the player and rams them.
   chasePlayer(car, dt, game) {
     const p = game.player;
     const tx = p.inCar ? game.playerCar.x : p.x;
@@ -306,7 +341,6 @@ export class Traffic {
       if (p.inCar) game.playerCar.damage(180 * dt, game);
       else game.bustPlayer();
     }
-    // Too far behind: give up so the chase can end.
     if (d > 1400) car.dead = true;
   }
 

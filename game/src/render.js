@@ -68,6 +68,7 @@ export class Renderer {
     this.drawCars(ctx, game);
     this.drawPlayer(ctx, game);
     this.drawEffects(ctx, game);
+    this.drawHelicopter(ctx, game);
     this.drawSunset(ctx);
     // Rain falls over the whole viewport, above the world.
     game.weather.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H });
@@ -255,6 +256,25 @@ export class Renderer {
     for (const l of game.city.lamps) ctx.fillRect(l.x - 2, l.y - 2, 4, 4);
     ctx.fillStyle = '#c0392b';
     for (const h of game.city.hydrants) ctx.fillRect(h.x - 3, h.y - 3, 6, 6);
+    // Food stalls: striped awning and counter.
+    for (const ped of game.crowd.peds) {
+      if (ped.kind !== 'vendor' || ped.state === 'down') continue;
+      if (!overlaps(view, ped.x - 30, ped.y - 30, 60, 60)) continue;
+      ctx.save();
+      ctx.translate(ped.x, ped.y);
+      ctx.rotate(ped.angle);
+      ctx.fillStyle = '#8a6b46';
+      ctx.fillRect(-14, -10, 28, 20);
+      ctx.fillStyle = '#e8e4da';
+      ctx.fillRect(-16, -12, 32, 5);
+      ctx.fillStyle = '#e33f2f';
+      for (let i = -2; i <= 2; i += 2) ctx.fillRect(-16 + i * 8, -12, 8, 5);
+      ctx.fillStyle = '#f2c230';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('SNACKS', 0, 4);
+      ctx.restore();
+    }
     // Stunt ramps: chevron boards across the road.
     for (const ramp of game.stunts.ramps) {
       if (!overlaps(view, ramp.x - 30, ramp.y - 30, 60, 60)) continue;
@@ -477,6 +497,27 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.fillText('ARMORED', 0, 3);
     }
+    if (car.bus) {
+      // A bus is a long box with a row of windows and a route number.
+      ctx.fillStyle = '#1d2733';
+      for (let i = 0; i < 4; i++) ctx.fillRect(-car.w / 2 + 8 + i * 13, -car.h / 2 + 3, 9, car.h - 6);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('7', car.w / 2 - 8, 3);
+    }
+    if (car.bike) {
+      // A bike is a sliver with a rider hunched over it.
+      ctx.fillStyle = '#14141a';
+      ctx.beginPath();
+      ctx.arc(-car.w / 2 + 3, 0, 4, 0, Math.PI * 2);
+      ctx.arc(car.w / 2 - 3, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e33f2f';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // Damage smoke.
     if (car.smoke > 0) {
       ctx.fillStyle = `rgba(120,120,120,${0.5 * car.smoke})`;
@@ -526,6 +567,57 @@ export class Renderer {
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 18 + Math.sin(this.time * 4) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // The police helicopter: dark body, spinning rotor, spotlight cone tracking Marco.
+  drawHelicopter(ctx, game) {
+    const heli = game.police && game.police.heli;
+    if (!heli) return;
+    const p = game.player;
+    const tx = p.inCar && game.playerCar ? game.playerCar.x : p.x;
+    const ty = p.inCar && game.playerCar ? game.playerCar.y : p.y;
+    if (heli.watching) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,240,180,0.16)';
+      ctx.beginPath();
+      ctx.moveTo(heli.x, heli.y);
+      ctx.lineTo(tx - 55, ty - 55);
+      ctx.lineTo(tx + 55, ty + 55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,240,180,0.30)';
+      ctx.beginPath();
+      ctx.arc(tx, ty, 42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.save(); // shadow on the ground, body floating above it
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(heli.x, heli.y, 26, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(heli.x, heli.y - 26);
+    ctx.rotate(heli.angle);
+    ctx.fillStyle = '#20242e';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 20, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8fc7e8';
+    ctx.beginPath();
+    ctx.arc(10, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2e6bff';
+    ctx.fillRect(-16, -3, 8, 6);
+    ctx.strokeStyle = 'rgba(32,36,46,0.7)'; // spinning rotor, blurred
+    ctx.lineWidth = 3;
+    const r = this.time * 22;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(r) * 30, Math.sin(r) * 30);
+    ctx.lineTo(-Math.cos(r) * 30, -Math.sin(r) * 30);
     ctx.stroke();
     ctx.restore();
   }
@@ -612,9 +704,16 @@ export class Renderer {
     }
     const courier = game.missions.courier;
     if (courier) blip(courier.target.x, courier.target.y, 4, '#7fd0ff');
-    // Police blips in blue.
+    // Police blips in blue; the helicopter in red.
     for (const car of game.traffic.cars) {
       if (car.police && !car.dead) blip(car.x, car.y, 2.5, '#4a90ff');
+    }
+    if (game.police && game.police.heli) {
+      blip(game.police.heli.x, game.police.heli.y, 3.5, '#ff2e2e');
+    }
+    // Food stalls in green.
+    for (const ped of game.crowd.peds) {
+      if (ped.kind === 'vendor') blip(ped.x, ped.y, 2.5, '#58d068');
     }
     // The player, as a white arrow.
     const pl = game.player;

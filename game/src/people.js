@@ -1,11 +1,8 @@
 // People: the player on foot, and pedestrians with somewhere to be.
-//
-// Every pedestrian runs a small state machine — stroll, chat, flee,
-// down — and comes in three kinds: walkers who stroll the sidewalks,
-// joggers who run the beach, and loiterers who hang around the
-// landmarks and talk. Two walkers who bump into each other may stop
-// and chat for a while, facing each other, before moving on.
-import { PLAYER_STATS, PED_NAMES, SHORE, clamp, distSq } from './config.js';
+// State machine — stroll, chat, flee, down — in five kinds: walkers,
+// joggers, loiterers, vendors at a food stall, taxi drivers by the
+// kerb. Vendors never move: walk up, press E, snack $15, +25 HP.
+import { PLAYER_STATS, PED_NAMES, SHORE, SNACK, clamp, distSq } from './config.js';
 import { AVENUES, STREETS } from './city.js';
 import { seeded, choose, between } from './rng.js';
 
@@ -14,14 +11,18 @@ let nextPedId = 1;
 const SHIRT_COLORS = ['#d94f70', '#4f7fd9', '#e8b23f', '#58a86b', '#9a5fd0', '#d97b4f'];
 const SKIN_TONES = ['#f0c8a0', '#c98d5f', '#8a5a3b', '#f5d7b0'];
 
-// Turn an angle difference into the [-PI, PI] range.
+// Fixed stalls: one on the Marina strip, one outside Club Flamingo.
+export const VENDOR_SPOTS = [
+  { x: 2900, y: 2290, angle: -Math.PI / 2 },
+  { x: 2100, y: 700, angle: Math.PI / 2 },
+];
+
 function shortestTurn(d) {
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
 }
 
-// Read WASD/arrows into a unit movement vector (or null when idle).
 function readMoveInput(keys) {
   let ix = 0;
   let iy = 0;
@@ -39,7 +40,7 @@ export class Ped {
     this.id = nextPedId++;
     this.x = x;
     this.y = y;
-    this.kind = kind; // walker | jogger | loiterer
+    this.kind = kind; // walker | jogger | loiterer | vendor | taxiDriver
     this.name = choose(rng, PED_NAMES);
     this.color = SHIRT_COLORS[Math.floor(rng() * SHIRT_COLORS.length)];
     this.skin = SKIN_TONES[Math.floor(rng() * SKIN_TONES.length)];
@@ -52,10 +53,10 @@ export class Ped {
     this.fleeTimer = 0;
     this.idleTimer = kind === 'loiterer' ? between(rng, 4, 10) : 0;
     this.r = 11;
+    this.isCop = false;
   }
 
-  // Pick a destination that fits the kind: joggers run the beach,
-  // loiterers shuffle between nearby spots, walkers cross the city.
+  // Destination by kind: joggers the beach, loiterers nearby, walkers the city.
   chooseDestination(rng) {
     if (this.kind === 'jogger') {
       this.target = {
@@ -71,6 +72,10 @@ export class Ped {
       };
       return;
     }
+    if (this.kind === 'vendor' || this.kind === 'taxiDriver') {
+      this.target = null;
+      return;
+    }
     if (rng() < 0.5) {
       const avenue = choose(rng, AVENUES);
       this.target = { x: avenue + (rng() < 0.5 ? -1 : 1) * 46, y: between(rng, 120, 2200) };
@@ -82,6 +87,16 @@ export class Ped {
 
   update(dt, game, rng) {
     if (this.state === 'down') return;
+    // A vendor minds the stall: only a knockdown moves them.
+    if (this.kind === 'vendor') return;
+    if (this.kind === 'taxiDriver') {
+      this.idleTimer -= dt;
+      if (this.idleTimer <= 0) {
+        this.idleTimer = 1.5 + Math.random();
+        this.angle += (Math.random() - 0.5) * 1.2;
+      }
+      return;
+    }
     if (this.state === 'chat') {
       this.chatTimer -= dt;
       if (this.chatPartner && this.chatPartner.state === 'chat') {
@@ -110,8 +125,7 @@ export class Ped {
     this.walkTowardTarget(dt, game);
   }
 
-  // Step toward the current target, turning smoothly and sliding out
-  // of buildings. Returns true when the target is reached.
+  // Step toward the target, turning smoothly, sliding out of buildings.
   walkTowardTarget(dt, game) {
     const dx = this.target.x - this.x;
     const dy = this.target.y - this.y;
@@ -135,7 +149,6 @@ export class Ped {
     return false;
   }
 
-  // Two strolling walkers who meet stop for a chat.
   tryChatWith(other, rng) {
     if (this.kind !== 'walker' || other.kind !== 'walker') return false;
     if (this.state !== 'stroll' || other.state !== 'stroll') return false;
@@ -154,6 +167,7 @@ export class Ped {
 
   scare(fromX, fromY) {
     if (this.state === 'down') return;
+    if (this.kind === 'vendor') return; // the stall stays put
     this.state = 'flee';
     this.chatPartner = null;
     this.fleeTimer = 3 + Math.random() * 2;
@@ -217,12 +231,10 @@ export class Player {
     if (this.hurtFlash > 0) this.hurtFlash -= dt;
   }
 
-  // When armed, the player faces the mouse cursor.
   aimAt(wx, wy) {
     this.angle = Math.atan2(wy - this.y, wx - this.x);
   }
 
-  // Everyone within fist range of the swing point goes down.
   punch(game) {
     if (this.punchCooldown > 0) return false;
     this.punchCooldown = 0.35;
@@ -262,7 +274,6 @@ export class Player {
     return landed;
   }
 
-  // Find the first person or car along a ray from (x, y) at an angle.
   firstAlongRay(game, x, y, angle, rangePx) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -344,6 +355,26 @@ export class Player {
   heal(amount) {
     this.health = Math.min(PLAYER_STATS.health, this.health + amount);
   }
+
+  // Buy a snack at a stall ($15, +25 HP). Returns true if it went through.
+  buySnack(game) {
+    const vendor = game.crowd.nearestVendor(this.x, this.y, 64);
+    if (!vendor || vendor.state === 'down') return false;
+    if (this.money < SNACK.price) {
+      game.hud.toast('NO CASH', `A snack costs $${SNACK.price} — you're short.`, 3);
+      return false;
+    }
+    if (this.health >= PLAYER_STATS.health) {
+      game.hud.toast('ALREADY FULL', "You're at full health — save your money, Marco.", 3);
+      return false;
+    }
+    this.money -= SNACK.price;
+    this.heal(SNACK.heal);
+    game.sounds.snack();
+    game.addParticles(vendor.x, vendor.y, 8, '#58d068');
+    game.hud.toast('SNACK', `+$${SNACK.price} well spent — +${SNACK.heal} HP. Best arepas in the Bay.`, 3);
+    return true;
+  }
 }
 
 export class Crowd {
@@ -351,6 +382,7 @@ export class Crowd {
     this.city = city;
     this.peds = [];
     this.rng = seeded(4242);
+    this.vendorsPlaced = false;
   }
 
   spawn(count, nearX, nearY) {
@@ -359,10 +391,8 @@ export class Crowd {
       const x = nearX + (this.rng() - 0.5) * 1500;
       const y = nearY + (this.rng() - 0.5) * 1100;
       if (roll < 0.15) {
-        // A beach jogger, running the sand.
         this.peds.push(new Ped(between(this.rng, 200, 3400), SHORE.sandY + between(this.rng, 25, 110), this.rng, 'jogger'));
       } else if (roll < 0.3) {
-        // A loiterer near a landmark, with nowhere urgent to be.
         const spots = Object.values(this.city.landmarks);
         const spot = spots[Math.floor(this.rng() * spots.length)];
         this.peds.push(new Ped(spot.x + between(this.rng, -90, 90), spot.y + between(this.rng, -90, 90), this.rng, 'loiterer'));
@@ -372,18 +402,49 @@ export class Crowd {
     }
   }
 
+  // Put the stalls out once: a vendor per fixed spot, a taxi driver by the club.
+  spawnVendors() {
+    if (this.vendorsPlaced) return;
+    this.vendorsPlaced = true;
+    for (const spot of VENDOR_SPOTS) {
+      const vendor = new Ped(spot.x, spot.y, this.rng, 'vendor');
+      vendor.angle = spot.angle;
+      vendor.color = '#e8e4da';
+      this.peds.push(vendor);
+    }
+    const club = this.city.landmarks.club;
+    const driver = new Ped(club.x + 60, club.y + 120, this.rng, 'taxiDriver');
+    driver.color = '#f2c230';
+    this.peds.push(driver);
+  }
+
+  nearestVendor(x, y, maxDist) {
+    let best = null;
+    let bestDist = maxDist * maxDist;
+    for (const ped of this.peds) {
+      if (ped.kind !== 'vendor' || ped.state === 'down') continue;
+      const d = distSq(x, y, ped.x, ped.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = ped;
+      }
+    }
+    return best;
+  }
+
   update(dt, game) {
     for (const ped of this.peds) ped.update(dt, game, this.rng);
     this.pairUpChatters();
     const px = game.player.x;
     const py = game.player.y;
     this.peds = this.peds.filter((ped) => {
+      // Vendors and taxi drivers are fixtures: they never despawn.
+      if (ped.kind === 'vendor' || ped.kind === 'taxiDriver') return true;
       const limit = ped.state === 'down' ? 900 : 1300;
       return distSq(ped.x, ped.y, px, py) < limit * limit;
     });
   }
 
-  // Walkers who cross paths may stop and talk for a while.
   pairUpChatters() {
     const walkers = this.peds.filter((p) => p.state === 'stroll' && p.kind === 'walker');
     for (let i = 0; i < walkers.length; i++) {

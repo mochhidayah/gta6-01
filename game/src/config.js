@@ -35,19 +35,24 @@ export const PLAYER_STATS = { walk: 170, sprint: 265, radius: 13, health: 100 };
 export const CAR_STATS = { brake: 700, reverseAccel: 260, topReverse: 160, steer: 2.6, grip: 6.5 };
 
 // The wanted ladder: five stars, and how the heat cools off.
+// Heat only falls while no police, foot cop or helicopter can see
+// Marco — the PoliceDirector in police.js enforces that.
 export const WANTED_RULES = {
   stars: 5,
-  coolOffDelay: 12, // quiet seconds before stars start to fall
+  coolOffDelay: 12, // quiet seconds, unseen, before stars start to fall
   coolOffStep: 8, // seconds per star lost while hidden
 };
 
 // The starting economy: pocket cash, taxi fares and stash value.
 export const ECONOMY = { startCash: 250, taxiMin: 60, taxiMax: 120, stashCash: 150 };
 
+export const SNACK = { price: 15, heal: 25 };
+
 export const SAVE_KEY = 'palmera-bay-save-v1';
 
 // The car catalogue — every model invented for this game. Top speed
-// and acceleration are in the game's own units; a taxi earns fares.
+// and acceleration are in the game's own units; a taxi earns fares,
+// a bike is fast and fragile, a bus is slow and nearly unkillable.
 export const CAR_CATALOG = [
   { name: 'Falcon GT', color: '#e33f2f', top: 520, accel: 480 },
   { name: 'Marina Sedan', color: '#3f7fd0', top: 430, accel: 400 },
@@ -57,6 +62,8 @@ export const CAR_CATALOG = [
   { name: 'Sand Buggy', color: '#7fc24a', top: 470, accel: 430 },
   { name: 'Midnight Van', color: '#5a4a7a', top: 400, accel: 360 },
   { name: 'Coral Coupe', color: '#ff7fbf', top: 500, accel: 460 },
+  { name: 'Bay Runner', color: '#ff8c1a', top: 560, accel: 560, bike: true },
+  { name: 'City Bus', color: '#2e9e6b', top: 320, accel: 240, bus: true },
 ];
 
 // The armored van for the final job — slow, heavy, worth a fortune.
@@ -75,22 +82,10 @@ export function clamp(value, low, high) {
   return value;
 }
 
-export function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
 export function distSq(ax, ay, bx, by) {
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
-}
-
-// Shortest-arc interpolation between two angles.
-export function turnToward(from, to, t) {
-  let d = to - from;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return from + d * t;
 }
 
 // Wrap an angle into [-PI, PI].

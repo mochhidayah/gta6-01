@@ -1,13 +1,11 @@
-// HUD: health, money, wanted stars, objective line, speed, weapon,
-// radio, in-game clock, toast banners and the menu screens
-// (start / pause / busted / wasted / story complete).
-//
-// Every frame the game hands the HUD itself and the HUD paints the
-// numbers. The objective line picks the most urgent thing to say:
-// the story step, then a taxi fare, then a courier run, then the
-// free-roam hint.
+// HUD: health, money, wanted stars with a heat bar, the mission
+// objective tracker, speed, weapon, radio, clock, toasts, menus.
+// The tracker (top-left) shows mission title, step, timer. The heat
+// bar fills as the wanted level nears its next star; a helicopter
+// badge appears while the chopper watches.
 const ELEMENT_IDS = [
-  'hud', 'health-fill', 'health-num', 'money', 'stars', 'objective',
+  'hud', 'health-fill', 'health-num', 'money', 'stars', 'heat-fill', 'heat-wrap',
+  'heli-alert', 'objective', 'objective-title', 'objective-step', 'objective-timer',
   'speed', 'weapon', 'radio', 'clock', 'toast', 'toast-title', 'toast-body',
   'menu', 'menu-title', 'menu-body', 'menu-hint', 'minimap', 'fps',
 ];
@@ -66,7 +64,13 @@ export class HUD {
     this.el.money.textContent = moneyText(p.money);
     this.el.stars.textContent = starsText(game.wanted);
     this.el.stars.style.color = game.wanted > 0 ? '#ffd23f' : '#ffffff88';
-    this.el.objective.textContent = this.objectiveText(game);
+    const heat = game.police ? game.police.heatFrac() : 0;
+    this.el['heat-fill'].style.width = `${Math.round(heat * 100)}%`;
+    this.el['heat-wrap'].style.display = game.wanted > 0 ? 'block' : 'none';
+    const watched = !!(game.police && game.police.watched);
+    this.el['heli-alert'].style.display = watched ? 'block' : 'none';
+    if (watched) this.el['heli-alert'].textContent = '🚁 HELICOPTER WATCHING — break line of sight!';
+    this.paintTracker(game);
     this.el.speed.textContent = speedText(game);
     this.el.weapon.textContent = weaponText(game);
     this.el.radio.textContent = game.sounds.radioOn
@@ -79,35 +83,53 @@ export class HUD {
     }
   }
 
-  // The top-left objective line: mission step, taxi fare, courier run,
-  // or the free-roam hint when nothing is on.
-  objectiveText(game) {
-    const step = game.missions.currentStep();
-    if (step) return this.stepText(game, step);
-    const taxi = game.missions.taxi;
-    if (taxi) {
-      return taxi.stage === 'pickup'
-        ? 'Taxi: pick up the passenger at the marker.'
-        : 'Taxi: drop the passenger at the marker.';
+  // Tracker: mission title, step, timer; taxi / courier / free-roam when idle.
+  paintTracker(game) {
+    const m = game.missions;
+    const step = m.currentStep();
+    if (step) {
+      this.el['objective-title'].textContent = `◆ ${m.active.def.title}  ($${m.active.def.pay})`;
+      this.el['objective-step'].textContent = step.text;
+      this.el['objective-timer'].textContent = this.timerText(game, step);
+      return;
     }
-    const courier = game.missions.courier;
-    if (courier) {
-      return `${courier.label}  —  ${Math.ceil(courier.timeLeft)}s left.`;
+    if (m.taxi) {
+      this.el['objective-title'].textContent = '◆ TAXI FARE';
+      this.el['objective-step'].textContent = m.taxi.stage === 'pickup'
+        ? 'Pick up the passenger at the marker.'
+        : 'Drop the passenger at the marker.';
+      this.el['objective-timer'].textContent = '';
+      return;
     }
-    if (game.missions.storyDone) return 'Story complete — free roam: fares, runs, stashes, chaos.';
-    return 'No active mission — press M for the next job.';
+    if (m.courier) {
+      this.el['objective-title'].textContent = '◆ COURIER RUN';
+      this.el['objective-step'].textContent = m.courier.label;
+      this.el['objective-timer'].textContent = `${Math.ceil(m.courier.timeLeft)}s left`;
+      return;
+    }
+    this.el['objective-title'].textContent = m.storyDone
+      ? '◆ STORY COMPLETE'
+      : `◆ NEXT JOB: ${m.storyIndex + 1} of ${10}`;
+    this.el['objective-step'].textContent = m.storyDone
+      ? 'Free roam: fares, runs, stashes, chaos.'
+      : 'Press M for the next job.';
+    this.el['objective-timer'].textContent = '';
   }
 
-  stepText(game, step) {
-    let text = step.text;
+  timerText(game, step) {
     if (step.timer) {
       const left = Math.max(0, step.timer - game.missions.active.timer);
-      text += `  —  ${Math.ceil(left)}s`;
+      return `${Math.ceil(left)}s left`;
     }
     if (step.type === 'rob' && game.missions.active.holdT > 0) {
-      text += `  —  ${game.missions.active.holdT.toFixed(1)}s / ${step.hold}s`;
+      return `${game.missions.active.holdT.toFixed(1)}s / ${step.hold}s`;
     }
-    return text;
+    if (step.type === 'defeat') {
+      const crew = game.gangs.members.filter((x) => x.crew.name === step.crew && x.state === 'down').length;
+      const base = game.missions.active.defeatBase || 0;
+      return `${Math.max(0, crew - base)} / ${step.count} down`;
+    }
+    return '';
   }
 
   toast(title, body, seconds = 4) {
