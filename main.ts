@@ -10,9 +10,12 @@
 // The game itself is an original top-down open-world crime game: a seeded
 // city to explore on foot and by car, traffic and pedestrians, cars to
 // steal, a wanted level with police who chase (plus a helicopter and
-// roadblocks at high heat), thirteen story missions, courier runs, combat,
+// roadblocks at high heat), eighteen story missions, courier runs, combat,
 // a HUD with a minimap and an objective tracker, synthesised sound and
-// radio, and a save.
+// radio, and a save. The v7 systems add a business empire with rival
+// raids, a garage with paint and nitro, five empire missions, district
+// heat with bribes, ambient city life with regulars and street events,
+// and an arsenal with eight weapons and a workbench.
 //
 // Play it locally with `node serve.ts`, then open http://localhost:8080.
 // v6: two local names refreshed; the hand-in itself is unchanged.
