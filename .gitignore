@@ -1,2 +1,16 @@
+# Build output from `node main.ts` (MAKEFUN_OUTPUT_DIR or /output).
 out/
+
+# Dependencies, if any are ever added (the game itself has none).
 node_modules/
+
+# Editor and OS clutter.
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local screenshots staging — the final four live in screenshots/.
+shots/
+tmp/

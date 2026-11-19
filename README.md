@@ -7,9 +7,31 @@
 An entry for the [make.fun "Make GTA 6" bounty](https://make.fun/bounty/gta6-01) ($1,666): a complete,
 original open-world crime game that runs offline in a desktop browser from static files.
 
-**Marco Solano** is back in Palmera Bay with $250 and a debt to pay. Ten story jobs stand between
+**Marco Solano** is back in Palmera Bay with $250 and a debt to pay. Thirteen story jobs stand between
 him and freedom — a stolen car, a pickup against the clock, a police chase to outrun, a delivery,
-a bank job, a night-shift courier rush, a turf war, and one last dockside heist — plus taxi fares and hidden cash stashes in free roam.
+a bank job, a night-shift courier rush, a turf war, one last dockside heist, and three new ones:
+a street race at the stadium, payback at the docks, and a clean slate at the airfield — plus taxi
+fares, courier runs, street races, daily challenges and hidden cash stashes in free roam.
+
+## What's new in v3
+
+- **Day/night cycle** — the clock runs from a 17:00 sunset into a dark night (20:00–05:00) with
+  stars, lamp glow and headlight cones; the four screenshots are taken at 17:00 so they stay bright.
+- **Street races** — drive onto the stadium pad, press **T**, and race three rivals over four
+  checkpoints (airfield, marina, docks, club) for up to $800. Winning adds a star of heat.
+- **Stats and achievements** — thirteen achievements (first job, first race win, ghost escape,
+  near-miss streaks, jump combos and more) tracked across the whole save, with a lifetime total
+  earned and a summary on the pause screen.
+- **World pickups** — ammo boxes, medkits and dropped wallets at ten fixed spots around the city,
+  respawning about a minute after they are taken.
+- **Photo mode** — press **C** to freeze the world and pan the camera with WASD for the perfect shot.
+- **Daily challenges** — three fresh goals every day (races won, near misses, fares, jumps…),
+  each paying a bonus.
+- **Spike strips** — at five stars the precinct lays spike strips ahead of you: steer around them
+  or lose tires and speed. **Bay fog** rolls in off the water between clear spells and downpours.
+- **Gang retaliation** — drop a Shark or a Viper and their crew sends a squad after you.
+- **Tourists** — camera-wielding visitors drift between the sights, pausing to take photos.
+- **Fragile courier parcels** — a third of the parcels pay half again, but a hard crash smashes them.
 
 ## Play it
 
@@ -31,7 +53,8 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
   cover). At 3+ stars roadblocks go up ahead of you; at 4–5 stars a police helicopter circles
   overhead, its spotlight keeping you visible. Lose the heat to clear it; getting busted or
   wasted costs you money.
-- **Missions and story** — ten jobs with markers, timers, hold-ups, a turf war and escapes, each with a payday.
+- **Missions and story** — thirteen jobs with markers, timers, hold-ups, a turf war, a street race and escapes, each with a payday.
+- **Day/night, fog and rain** — a full day cycle from sunset to night, bay fog, and downpours with lightning.
 - **More wheels and street life** — a fast, fragile motorcycle and a slow, near-unkillable city
   bus join the traffic; street vendors sell snacks that restore health ($15), and a taxi that
   pulls over for you starts a fare when you hop in.
@@ -54,6 +77,9 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 | Shift | Sprint |
 | H | Honk |
 | M | Next mission |
+| T | Start street race (at the stadium pad) |
+| C | Photo mode |
+| Mouse wheel | Cycle weapon (fists / pistol) |
 | R | Change radio station |
 | 1 / 2 | Fists / pistol |
 | P | Pause |
@@ -61,7 +87,8 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 ## Layout
 
 - `game/` — the game itself: `index.html` and `src/` (one job per file: config, rng, city,
-  vehicles, people, missions, police, render, hud, input, audio, shots).
+  vehicles, people, missions, police, render, hud, input, audio, shots, plus the v3 systems
+  daynight, races, stats, pickups, photomode and challenges).
 - `main.ts` — the entry program: copies `game/` and `screenshots/` to `/output` and writes
   `dossier.json` with the vendored make.fun library.
 - `screenshots/` — four real renders of the game running in a browser.
