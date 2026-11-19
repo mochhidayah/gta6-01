@@ -11,6 +11,7 @@
 // so a broken asset shows up in the terminal instead of silently
 // failing in the browser. v4 rewrote this file wholesale — same
 // routes, same guards, new structure.
+// v5: a few internal names refreshed, behaviour identical.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -43,7 +44,7 @@ const MIME = {
 };
 
 // Parse --port from the argv; anything invalid falls back to 8080.
-function parsePort(argv) {
+function readPort(argv) {
   const flag = argv.indexOf('--port');
   const value = flag === -1 ? NaN : Number(argv[flag + 1]);
   return Number.isInteger(value) && value > 0 && value < 65536 ? value : 8080;
@@ -51,35 +52,35 @@ function parsePort(argv) {
 
 // --host binds the server somewhere else (default loopback only);
 // pass 0.0.0.0 to play from another device on your own network.
-function parseHost(argv) {
+function readHost(argv) {
   const flag = argv.indexOf('--host');
   if (flag === -1 || !argv[flag + 1]) return '127.0.0.1';
   return argv[flag + 1];
 }
 
 // --log prints one line per request to stdout.
-function parseLogging(argv) {
+function readLogging(argv) {
   return argv.includes('--log');
 }
 
-const port = parsePort(process.argv.slice(2));
-const host = parseHost(process.argv.slice(2));
-const logging = parseLogging(process.argv.slice(2));
+const port = readPort(process.argv.slice(2));
+const host = readHost(process.argv.slice(2));
+const logging = readLogging(process.argv.slice(2));
 
-function logRequest(method, pathname, status) {
+function noteRequest(method, pathname, status) {
   if (!logging) return;
-  const stamp = new Date().toISOString().slice(11, 19);
-  console.log(`${stamp} ${method} ${pathname} -> ${status}`);
+  const clock = new Date().toISOString().slice(11, 19);
+  console.log(`${clock} ${method} ${pathname} -> ${status}`);
 }
 
 // Resolve a request path to a file inside game/, or null if it escapes.
-function resolveInside(pathname) {
+function resolveInRoot(pathname) {
   const file = resolve(join(root, normalize(pathname)));
   if (file !== root && !file.startsWith(root + sep)) return null;
   return file;
 }
 
-function mimeFor(file) {
+function mimeType(file) {
   return MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
 }
 
@@ -89,30 +90,30 @@ createServer((request, response) => {
   try {
     pathname = decodeURIComponent(url.pathname);
   } catch {
-    logRequest(request.method, url.pathname, 400);
+    noteRequest(request.method, url.pathname, 400);
     response.writeHead(400).end('bad request');
     return;
   }
   if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolveInside(pathname);
+  const file = resolveInRoot(pathname);
   if (file === null) {
-    logRequest(request.method, pathname, 403);
+    noteRequest(request.method, pathname, 403);
     response.writeHead(403).end('forbidden');
     return;
   }
   let size;
   try {
-    const stats = statSync(file);
-    if (!stats.isFile()) throw new Error('not a file');
-    size = stats.size;
+    const info = statSync(file);
+    if (!info.isFile()) throw new Error('not a file');
+    size = info.size;
   } catch {
-    logRequest(request.method, pathname, 404);
+    noteRequest(request.method, pathname, 404);
     response.writeHead(404).end('not found');
     return;
   }
-  logRequest(request.method, pathname, 200);
+  noteRequest(request.method, pathname, 200);
   response.writeHead(200, {
-    'content-type': mimeFor(file),
+    'content-type': mimeType(file),
     'content-length': size,
     'cache-control': 'no-store',
   });

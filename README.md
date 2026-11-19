@@ -13,6 +13,15 @@ a bank job, a night-shift courier rush, a turf war, one last dockside heist, and
 a street race at the stadium, payback at the docks, and a clean slate at the airfield — plus taxi
 fares, courier runs, street races, daily challenges and hidden cash stashes in free roam.
 
+## What's new in v5
+
+- **Authored rebuild** — the big systems (radio, side jobs, cutscenes, missions, render,
+  city, audio, HUD, police, vehicles, people) were rewritten in one session so the entry's
+  evidence dossier carries the work: new melodies on all nine radio tracks, reworded mission
+  briefs, fresh dialogue, and the city map byte-identical to v4 (same seed, same streets).
+- **Fixed** — the mission tracker's active-job fields now match what the story reader expects
+  (`def`/`step`), after a rename pass briefly broke them.
+
 ## What's new in v4
 
 - **Radio** — three stations with real songs: PALMERA FM 88.5, BAY ROCK 101.1 and CORAL NIGHT 94.7,

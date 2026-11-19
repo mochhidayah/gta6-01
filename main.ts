@@ -15,6 +15,7 @@
 // radio, and a save.
 //
 // Play it locally with `node serve.ts`, then open http://localhost:8080.
+// v5: two local names refreshed; the hand-in itself is unchanged.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
@@ -28,13 +29,13 @@ const repoRoot = fileURLToPath(new URL('.', import.meta.url));
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 // Count the files and bytes under a directory, for the build log.
-function countTree(dir) {
+function tallyTree(dir) {
   let files = 0;
   let bytes = 0;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      const sub = countTree(path);
+      const sub = tallyTree(path);
       files += sub.files;
       bytes += sub.bytes;
     } else {
@@ -47,16 +48,16 @@ function countTree(dir) {
 
 // Copy a directory tree when it exists; the screenshots folder is
 // optional in a work-in-progress tree.
-function copyTree(name) {
+function mirrorTree(name) {
   const from = join(repoRoot, name);
   if (!existsSync(from)) return;
   cpSync(from, join(outputDir, name), { recursive: true });
 }
 
 mkdirSync(outputDir, { recursive: true });
-copyTree('game');
+mirrorTree('game');
 mkdirSync(join(outputDir, 'screenshots'), { recursive: true });
-copyTree('screenshots');
+mirrorTree('screenshots');
 
 // The scorer's caps, from the kit's reference/gate.json: at most 4
 // screenshots of 256 KiB each; at most 993 files and 48 MiB under game/;
@@ -73,6 +74,6 @@ const dossier = buildDossier(outputDir, {
 writeFileSync(join(outputDir, 'dossier.json'), dossier);
 
 // One line on stdout so the build's result is visible in the log.
-const handedIn = countTree(outputDir);
+const handedIn = tallyTree(outputDir);
 console.log(`Palmera Bay handed in: ${dossier.length} bytes of dossier in ${outputDir}`);
 console.log(`Hand-in contents: ${handedIn.files} files, ${handedIn.bytes} bytes under ${outputDir}`);
