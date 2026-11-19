@@ -2,53 +2,53 @@
 // objective tracker, speed, weapon, radio, clock, toasts, menus.
 // The tracker (top-left) shows mission title, step, timer. The heat
 // bar fills as the wanted level nears its next star; a helicopter
-// badge appears while the chopper watches. v5 rewrote this file
+// badge appears while the chopper watches. v6 rewrote this file
 // wholesale — same elements, same text, new internal names.
-const ELEMENT_IDS = [
+const UI_IDS = [
   'hud', 'health-fill', 'health-num', 'money', 'stars', 'heat-fill', 'heat-wrap',
   'heli-alert', 'objective', 'objective-title', 'objective-step', 'objective-timer',
   'speed', 'weapon', 'radio', 'clock', 'toast', 'toast-title', 'toast-body',
   'menu', 'menu-title', 'menu-body', 'menu-hint', 'minimap', 'fps', 'race-status',
 ];
 
-function hpColor(hp) {
+function healthColor(hp) {
   if (hp > 50) return '#58d068';
   if (hp > 25) return '#f2c230';
   return '#e33f2f';
 }
 
-function cashText(amount) {
+function moneyText(amount) {
   return `$${amount.toLocaleString('en-US')}`;
 }
 
-function starRow(wanted) {
+function starsText(wanted) {
   return '★'.repeat(wanted) + '☆'.repeat(5 - wanted);
 }
 
-function clockLabel(clockSeconds) {
+function timeText(clockSeconds) {
   const totalMins = Math.floor(clockSeconds / 60);
   const hour = (17 + Math.floor(totalMins / 60)) % 24;
   const minute = String(totalMins % 60).padStart(2, '0');
   return `${String(hour).padStart(2, '0')}:${minute}`;
 }
 
-function speedLabel(game) {
-  const p = game.player;
-  if (p.inCar && game.playerCar) return `${Math.round(Math.abs(game.playerCar.speed) * 0.22)} km/h`;
-  return p.sprint ? 'Sprinting' : 'On foot';
+function speedText(game) {
+  const hero = game.player;
+  if (hero.inCar && game.playerCar) return `${Math.round(Math.abs(game.playerCar.speed) * 0.22)} km/h`;
+  return hero.sprint ? 'Sprinting' : 'On foot';
 }
 
-function weaponLabel(game) {
-  const p = game.player;
-  if (p.inCar) return game.playerCar.model.name;
-  if (p.weapon === 'pistol') return `Pistol · ${p.ammo} rounds`;
+function weaponText(game) {
+  const hero = game.player;
+  if (hero.inCar) return game.playerCar.model.name;
+  if (hero.weapon === 'pistol') return `Pistol · ${hero.ammo} rounds`;
   return 'Fists';
 }
 
 export class HUD {
   constructor() {
     this.el = {};
-    for (const id of ELEMENT_IDS) this.el[id] = document.getElementById(id);
+    for (const id of UI_IDS) this.el[id] = document.getElementById(id);
     this.toastTimer = 0;
   }
 
@@ -75,13 +75,13 @@ export class HUD {
   }
 
   update(game, dt) {
-    const p = game.player;
+    const hero = game.player;
     const bar = this.el['health-fill'];
-    bar.style.width = `${p.health}%`;
-    bar.style.background = hpColor(p.health);
-    this.el['health-num'].textContent = `${Math.ceil(p.health)} HP`;
-    this.el.money.textContent = cashText(p.money);
-    this.el.stars.textContent = starRow(game.wanted);
+    bar.style.width = `${hero.health}%`;
+    bar.style.background = healthColor(hero.health);
+    this.el['health-num'].textContent = `${Math.ceil(hero.health)} HP`;
+    this.el.money.textContent = moneyText(hero.money);
+    this.el.stars.textContent = starsText(game.wanted);
     this.el.stars.style.color = game.wanted > 0 ? '#ffd23f' : '#ffffff88';
     const heat = game.police ? game.police.heatFrac() : 0;
     this.el['heat-fill'].style.width = `${Math.round(heat * 100)}%`;
@@ -90,12 +90,12 @@ export class HUD {
     this.el['heli-alert'].style.display = watched ? 'block' : 'none';
     if (watched) this.el['heli-alert'].textContent = '🚁 HELICOPTER WATCHING — break line of sight!';
     this.drawTracker(game);
-    this.el.speed.textContent = speedLabel(game);
-    this.el.weapon.textContent = weaponLabel(game);
+    this.el.speed.textContent = speedText(game);
+    this.el.weapon.textContent = weaponText(game);
     this.el.radio.textContent = game.sounds.radioOn
       ? `♪ ${game.sounds.radioNames[game.sounds.station]}`
       : '♪ Radio off';
-    this.el.clock.textContent = clockLabel(game.clock);
+    this.el.clock.textContent = timeText(game.clock);
     this.drawRaceChip(game);
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
@@ -106,37 +106,37 @@ export class HUD {
   // Race status chip (top centre): countdown, checkpoint, or the
   // armed prompt. Hidden when no race is anywhere near starting.
   drawRaceChip(game) {
-    const el = this.el['race-status'];
-    if (!el) return;
+    const chip = this.el['race-status'];
+    if (!chip) return;
     const race = game.races;
     if (!race) {
-      el.style.display = 'none';
+      chip.style.display = 'none';
       return;
     }
     if (race.state === 'countdown') {
-      el.style.display = 'block';
-      el.textContent = `🏁 ${Math.ceil(race.countdown)}...`;
+      chip.style.display = 'block';
+      chip.textContent = `🏁 ${Math.ceil(race.countdown)}...`;
       return;
     }
     if (race.state === 'racing') {
-      el.style.display = 'block';
-      el.textContent = `🏁 CHECKPOINT ${Math.min(race.next + 1, race.route.length)} / ${race.route.length} — ${Math.floor(race.time)}s`;
+      chip.style.display = 'block';
+      chip.textContent = `🏁 CHECKPOINT ${Math.min(race.next + 1, race.route.length)} / ${race.route.length} — ${Math.floor(race.time)}s`;
       return;
     }
     if (race.state === 'armed') {
-      el.style.display = 'block';
-      el.textContent = '🏁 STREET RACE — press T to line up';
+      chip.style.display = 'block';
+      chip.textContent = '🏁 STREET RACE — press T to line up';
       return;
     }
-    el.style.display = 'none';
+    chip.style.display = 'none';
   }
 
   // Tracker: mission title, step, timer; taxi / courier / free-roam when idle.
   drawTracker(game) {
-    const m = game.missions;
-    const step = m.currentStep();
+    const msn = game.missions;
+    const step = msn.currentStep();
     if (step) {
-      this.el['objective-title'].textContent = `◆ ${m.active.def.title}  ($${m.active.def.pay})`;
+      this.el['objective-title'].textContent = `◆ ${msn.active.def.title}  ($${msn.active.def.pay})`;
       this.el['objective-step'].textContent = step.text;
       this.el['objective-timer'].textContent = this.stepTimerText(game, step);
       return;
@@ -156,25 +156,25 @@ export class HUD {
       }
       return;
     }
-    if (m.taxi) {
+    if (msn.taxi) {
       this.el['objective-title'].textContent = '◆ TAXI FARE';
-      this.el['objective-step'].textContent = m.taxi.stage === 'pickup'
+      this.el['objective-step'].textContent = msn.taxi.stage === 'pickup'
         ? 'Pick up the passenger at the marker.'
         : 'Drop the passenger at the marker.';
       this.el['objective-timer'].textContent = '';
       return;
     }
-    if (m.courier) {
+    if (msn.courier) {
       this.el['objective-title'].textContent = '◆ COURIER RUN';
-      this.el['objective-step'].textContent = m.courier.label;
-      this.el['objective-timer'].textContent = `${Math.ceil(m.courier.timeLeft)}s left`;
+      this.el['objective-step'].textContent = msn.courier.label;
+      this.el['objective-timer'].textContent = `${Math.ceil(msn.courier.timeLeft)}s left`;
       return;
     }
     const challenge = game.challenges ? game.challenges.current : null;
-    this.el['objective-title'].textContent = m.storyDone
+    this.el['objective-title'].textContent = msn.storyDone
       ? '◆ STORY COMPLETE'
-      : `◆ NEXT JOB: ${m.storyIndex + 1} of ${m.total}`;
-    this.el['objective-step'].textContent = m.storyDone
+      : `◆ NEXT JOB: ${msn.storyIndex + 1} of ${msn.total}`;
+    this.el['objective-step'].textContent = msn.storyDone
       ? 'Free roam: fares, runs, races, stashes, chaos.'
       : 'Press M for the next job.';
     this.el['objective-timer'].textContent = challenge
@@ -191,9 +191,9 @@ export class HUD {
       return `${game.missions.active.holdT.toFixed(1)}s / ${step.hold}s`;
     }
     if (step.type === 'defeat') {
-      const crew = game.gangs.members.filter((x) => x.crew.name === step.crew && x.state === 'down').length;
+      const down = game.gangs.members.filter((x) => x.crew.name === step.crew && x.state === 'down').length;
       const base = game.missions.active.defeatBase || 0;
-      return `${Math.max(0, crew - base)} / ${step.count} down`;
+      return `${Math.max(0, down - base)} / ${step.count} down`;
     }
     return '';
   }
