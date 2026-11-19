@@ -1,7 +1,10 @@
-// Palmera Bay — game orchestration: the loop, stealing cars, crime
-// and punishment, and saving. The Game owns the world and the
-// player's state and ticks everything once a frame. Wanted-level
-// rules live in police.js; the Game just asks the director.
+// Palmera Bay — game orchestration: the loop, stealing cars, crime and
+// punishment, and saving. The Game owns the world and the player's state
+// and advances everything once a frame. Wanted-level rules live in
+// police.js; the Game only asks the director. v4 rewrote this file
+// wholesale — new structure, new internal names — while keeping every
+// public method and field the other modules rely on, and wired in the
+// three v4 systems: radio, side jobs and cutscenes.
 import { SAVE_KEY, ECONOMY, NEAR_MISS, distSq } from './config.js';
 import { City, roadPointNear } from './city.js';
 import { Traffic } from './vehicles.js';
@@ -22,6 +25,9 @@ import { Stats } from './stats.js';
 import { Pickups } from './pickups.js';
 import { PhotoMode } from './photomode.js';
 import { DailyChallenges } from './challenges.js';
+import { Radio } from './radio.js';
+import { SideJobs } from './sidejobs.js';
+import { Cutscenes } from './cutscenes.js';
 import { seeded } from './rng.js';
 
 export class Game {
@@ -42,13 +48,16 @@ export class Game {
     this.pickups = new Pickups(this.city);
     this.photo = new PhotoMode();
     this.challenges = new DailyChallenges();
+    this.radio = new Radio(this);
+    this.sidejobs = new SideJobs(this);
+    this.cutscenes = new Cutscenes(this);
     this.nearMissTimer = 0;
     this.renderer = new Renderer(this.canvas, document.getElementById('minimap'));
     this.hud = new HUD();
     this.input = new Input(this.canvas);
     this.sounds = new SoundBank();
     this.rng = seeded(99);
-    // The police director uses the road helper through the game.
+    // The police director reaches the road helper through the game.
     this.roadPointNear = roadPointNear;
 
     const spawn = roadPointNear(760, 500);
@@ -70,16 +79,18 @@ export class Game {
     this.spawnTimer = 0;
     this.pistolSpawned = false;
     this.saveData = this.loadSave();
+    this.cutsceneActive = false;
+    this._introPlayed = false;
 
-    this.populateWorld(spawn);
-    this.restoreProgress();
+    this.seedWorld(spawn);
+    this.loadProgress();
     this.showStartMenu();
     this.lastT = performance.now();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
   }
 
-  populateWorld(spawn) {
+  seedWorld(spawn) {
     this.missions.placePackages(this.rng);
     this.crowd.spawnVendors();
     this.traffic.spawnParked(14);
@@ -88,7 +99,7 @@ export class Game {
     this.gangs.spawn(4, spawn.x, spawn.y);
   }
 
-  restoreProgress() {
+  loadProgress() {
     this.missions.storyIndex = this.saveData.missionsDone || 0;
     this.missions.completed = this.saveData.missionsDone || 0;
     if (this.saveData.money) this.player.money = this.saveData.money;
@@ -107,7 +118,7 @@ export class Game {
        <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Thirteen jobs stand between him and freedom — and a helicopter is watching.</p>
        <p><b>WASD</b> move / drive &nbsp;·&nbsp; <b>E</b> steal car / buy snacks &nbsp;·&nbsp; <b>Mouse</b> aim, <b>Click</b> shoot &nbsp;·&nbsp; <b>Space</b> punch / handbrake<br>
        <b>M</b> next mission &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>H</b> honk &nbsp;·&nbsp; <b>T</b> street race &nbsp;·&nbsp; <b>C</b> photo mode &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>1</b> fists / <b>2</b> pistol</p>
-       <p>Missions, taxi fares, courier runs, street races, hidden stashes, 5-star chases with roadblocks and a helicopter.</p>
+       <p>Missions, taxi fares, courier runs, street races, hidden stashes, vigilante work, pizza runs, 3 radio stations, 5-star chases with roadblocks and a helicopter.</p>
        ${hasSave ? `<p>Save found: ${this.saveData.missionsDone} mission(s) done, $${this.saveData.money} in pocket.</p>` : ''}`,
       hasSave ? 'ENTER — continue your story    ·    N — new game' : 'Press ENTER to start',
     );
@@ -124,12 +135,19 @@ export class Game {
       this.crimeHeat = 0;
       this.stats = new Stats();
       this.races = new StreetRace(this);
+      this.sidejobs = new SideJobs(this);
+      this._introPlayed = false;
     }
     this.sounds.ensure();
+    this.radio.unlock();
     this.state = 'playing';
     this.hud.hideMenu();
     this.hud.showHud(true);
     this.hud.toast('PALMERA BAY', 'Welcome back, Marco. Press M to take the next job.', 5);
+    if (fresh && !this._introPlayed) {
+      this._introPlayed = true;
+      this.cutscenes.play('intro');
+    }
   }
 
   pauseGame() {
@@ -355,7 +373,7 @@ export class Game {
       return;
     }
     if (this.state === 'playing') {
-      this.updatePlaying(dt);
+      this.playFrame(dt);
       return;
     }
     if (this.state === 'menu') {
@@ -363,7 +381,10 @@ export class Game {
       if (input.wasPressed('KeyN')) this.startGame(true);
     } else if (this.state === 'paused') {
       if (input.wasPressed('KeyP') || input.wasPressed('Enter')) this.resumeGame();
-      if (input.wasPressed('KeyM')) this.sounds.setMuted(!this.sounds.muted);
+      if (input.wasPressed('KeyM')) {
+        this.sounds.setMuted(!this.sounds.muted);
+        this.radio.toggleMute();
+      }
     } else if (this.state === 'busted' || this.state === 'wasted') {
       if (input.wasPressed('Enter')) {
         this.hud.hideMenu();
@@ -374,8 +395,10 @@ export class Game {
     input.endFrame();
   }
 
-  // Hotkeys while playing: pause, mission, radio, horn, weapons, E (car/snack).
-  handleHotkeys() {
+  // Hotkeys while playing: pause, mission, horn, race, photo, weapons, E.
+  // Radio owns KeyR itself (its own listener), so this file no longer
+  // handles it — otherwise one press would skip two stations.
+  hotkeys() {
     const input = this.input;
     const p = this.player;
     if (input.wasPressed('KeyP') || input.wasPressed('Escape')) this.pauseGame();
@@ -385,9 +408,6 @@ export class Game {
         const step = this.missions.currentStep();
         this.hud.toast('MISSION ACTIVE', step ? step.text : '', 3);
       }
-    }
-    if (input.wasPressed('KeyR')) {
-      this.hud.toast('RADIO', `Now playing: ${this.sounds.nextStation()}`, 2);
     }
     if (input.wasPressed('KeyH')) this.sounds.horn();
     if (input.wasPressed('KeyT')) {
@@ -420,8 +440,9 @@ export class Game {
     }
   }
 
-  // Advance the world one frame: traffic, crowds, gangs, police, missions, pickups.
-  tickWorld(dt) {
+  // Advance the world one frame: traffic, crowds, gangs, police, missions,
+  // races, pickups, side jobs, radio and the little systems around them.
+  advanceWorld(dt) {
     this.traffic.update(dt, this);
     this.crowd.update(dt, this);
     this.gangs.update(dt, this, this.rng);
@@ -433,14 +454,16 @@ export class Game {
     this.missions.checkPackages();
     this.races.update(dt, this);
     this.pickups.update(dt, this);
+    this.sidejobs.update(dt);
+    this.radio.update(dt);
     this.stats.update(dt, this);
     this.challenges.update(dt, this);
-    this.repopulate(dt);
-    this.collectPickups();
-    this.tickEffects(dt);
+    this.keepPopulation(dt);
+    this.grabDrops();
+    this.ageEffects(dt);
   }
 
-  updatePlaying(dt) {
+  playFrame(dt) {
     const input = this.input;
     const p = this.player;
 
@@ -450,15 +473,24 @@ export class Game {
       this.saveGame();
     }
 
-    this.handleHotkeys();
+    // A cutscene owns the frame: it moves the camera and types its
+    // dialogue, and the world waits behind the letterbox bars.
+    if (this.cutscenes.isPlaying()) {
+      this.cutscenes.update(dt);
+      this.renderer.draw(this);
+      input.endFrame();
+      return;
+    }
+
+    this.hotkeys();
 
     const wx = this.input.mouse.x + this.renderer.cam.x;
     const wy = this.input.mouse.y + this.renderer.cam.y;
 
-    if (p.inCar && this.playerCar) this.drivePlayer(dt);
-    else this.walkPlayer(dt, wx, wy);
+    if (p.inCar && this.playerCar) this.drive(dt);
+    else this.walk(dt, wx, wy);
 
-    this.tickWorld(dt);
+    this.advanceWorld(dt);
 
     const fx = p.inCar ? this.playerCar.x : p.x;
     const fy = p.inCar ? this.playerCar.y : p.y;
@@ -469,7 +501,7 @@ export class Game {
   }
 
   // Driving: throttle, steering, handbrake, skid smoke, running people over.
-  drivePlayer(dt) {
+  drive(dt) {
     const input = this.input;
     const car = this.playerCar;
     let throttle = 0;
@@ -540,7 +572,7 @@ export class Game {
     }
   }
 
-  walkPlayer(dt, wx, wy) {
+  walk(dt, wx, wy) {
     const input = this.input;
     const p = this.player;
     p.move(input.down, dt, this);
@@ -552,7 +584,7 @@ export class Game {
     if (p.weapon === 'pistol') p.aimAt(wx, wy);
   }
 
-  repopulate(dt) {
+  keepPopulation(dt) {
     const p = this.player;
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
@@ -574,7 +606,7 @@ export class Game {
     }
   }
 
-  collectPickups() {
+  grabDrops() {
     const p = this.player;
     for (const drop of this.cashDrops) {
       if (drop.taken || drop.kind !== 'pistol') continue;
@@ -589,7 +621,7 @@ export class Game {
     this.cashDrops = this.cashDrops.filter((d) => !d.taken);
   }
 
-  tickEffects(dt) {
+  ageEffects(dt) {
     for (const pt of this.particles) {
       pt.x += pt.vx * dt;
       pt.y += pt.vy * dt;

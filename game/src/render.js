@@ -2,15 +2,18 @@
 // and the minimap. Everything is drawn with canvas primitives — the
 // game ships no image assets at all, so the whole look is code.
 //
-// The draw order is the depth order: grass, roads, park, shore,
+// The paint order is the depth order: grass, roads, park, shore,
 // buildings, props, stashes, markers, people, cars, the player,
-// effects, and finally the sunset wash over everything.
+// effects, and finally the sunset wash over everything. v4 rewrote
+// this file wholesale — new method names and structure, same pixels —
+// and added two hooks: side-job markers on the world and minimap, and
+// the cutscene title card.
 import { WORLD, ROAD, SHORE, COLORS, clamp } from './config.js';
 import { AVENUES, STREETS } from './city.js';
 
 // The rectangle of the world currently on screen, padded a little so
-// objects half in frame still draw.
-function visibleRect(cam, width, height, pad) {
+// objects half in frame still paint.
+function viewRect(cam, width, height, pad) {
   return {
     left: cam.x - pad,
     right: cam.x + width + pad,
@@ -19,8 +22,8 @@ function visibleRect(cam, width, height, pad) {
   };
 }
 
-// Does a box overlap a rectangle? Used to skip off-screen drawing.
-function overlaps(rect, x, y, w, h) {
+// Does a box overlap a rectangle? Used to skip off-screen painting.
+function hitsView(rect, x, y, w, h) {
   return x + w >= rect.left && x <= rect.right && y + h >= rect.top && y <= rect.bottom;
 }
 
@@ -56,38 +59,40 @@ export class Renderer {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
     ctx.translate(-Math.round(this.cam.x), -Math.round(this.cam.y));
-    this.drawGrass(ctx);
-    this.drawRoads(ctx);
-    this.drawPark(ctx, game);
-    this.drawShore(ctx);
-    this.drawBuildings(ctx, game);
-    this.drawProps(ctx, game);
-    this.drawStashes(ctx, game);
-    this.drawPickups(ctx, game);
-    this.drawMarkers(ctx, game);
-    this.drawRacePad(ctx, game);
-    this.drawPeople(ctx, game);
-    this.drawCars(ctx, game);
-    this.drawPlayer(ctx, game);
-    this.drawEffects(ctx, game);
-    this.drawHelicopter(ctx, game);
-    this.drawSpikes(ctx, game);
-    this.drawSunset(ctx);
+    this.paintGround(ctx);
+    this.paintRoads(ctx);
+    this.paintPark(ctx, game);
+    this.paintShore(ctx);
+    this.paintBuildings(ctx, game);
+    this.paintProps(ctx, game);
+    this.paintStashes(ctx, game);
+    this.paintPickups(ctx, game);
+    this.paintMarkers(ctx, game);
+    if (game.sidejobs) game.sidejobs.draw(ctx, this.cam);
+    this.paintRacePad(ctx, game);
+    this.paintPeople(ctx, game);
+    this.paintCars(ctx, game);
+    this.paintPlayer(ctx, game);
+    this.paintEffects(ctx, game);
+    this.paintHelicopter(ctx, game);
+    this.paintSpikes(ctx, game);
+    this.paintSunset(ctx);
     // Night falls over the world, then the rain over that.
     game.daynight.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H }, game);
     // Rain falls over the whole viewport, above the world.
     game.weather.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H });
     ctx.restore();
-    this.drawMinimap(game);
+    this.paintMinimap(game);
     if (game.player.hurtFlash > 0) {
       ctx.fillStyle = `rgba(227,63,47,${game.player.hurtFlash * 0.45})`;
       ctx.fillRect(0, 0, W, H);
     }
+    if (game.cutscenes) game.cutscenes.drawTitle(ctx, W, H);
   }
 
   // --- ground and roads ---
 
-  drawGrass(ctx) {
+  paintGround(ctx) {
     const w = this.canvas.width;
     const h = this.canvas.height;
     ctx.fillStyle = COLORS.grass;
@@ -105,7 +110,7 @@ export class Renderer {
   }
 
   // Avenues and streets visible right now, as {x} / {y} centre lines.
-  visibleRoads() {
+  roadsInView() {
     const pad = 80;
     const x0 = this.cam.x - pad;
     const x1 = this.cam.x + this.canvas.width + pad;
@@ -117,8 +122,8 @@ export class Renderer {
     };
   }
 
-  drawRoads(ctx) {
-    const { avenues, streets } = this.visibleRoads();
+  paintRoads(ctx) {
+    const { avenues, streets } = this.roadsInView();
     const half = ROAD.width / 2;
     // Asphalt first.
     ctx.fillStyle = COLORS.asphalt;
@@ -154,7 +159,7 @@ export class Renderer {
     }
   }
 
-  drawPark(ctx, game) {
+  paintPark(ctx, game) {
     const p = game.city.park;
     ctx.fillStyle = COLORS.parkGreen;
     ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -172,7 +177,7 @@ export class Renderer {
     ctx.fillText('PALMERA PARK', p.x + p.w / 2, p.y + 24);
   }
 
-  drawShore(ctx) {
+  paintShore(ctx) {
     // Sand, then the boardwalk, then Coral Bay itself.
     ctx.fillStyle = COLORS.sand;
     ctx.fillRect(0, SHORE.sandY, WORLD.width, SHORE.waterY - SHORE.sandY);
@@ -198,10 +203,10 @@ export class Renderer {
 
   // --- city furniture ---
 
-  drawBuildings(ctx, game) {
-    const view = visibleRect(this.cam, this.canvas.width, this.canvas.height, 40);
+  paintBuildings(ctx, game) {
+    const view = viewRect(this.cam, this.canvas.width, this.canvas.height, 40);
     for (const b of game.city.buildings) {
-      if (!overlaps(view, b.x, b.y, b.w, b.h)) continue;
+      if (!hitsView(view, b.x, b.y, b.w, b.h)) continue;
       // Drop shadow, then the roof.
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fillRect(b.x + 6, b.y + 8, b.w, b.h);
@@ -228,10 +233,10 @@ export class Renderer {
     }
   }
 
-  drawProps(ctx, game) {
-    const view = visibleRect(this.cam, this.canvas.width, this.canvas.height, 30);
+  paintProps(ctx, game) {
+    const view = viewRect(this.cam, this.canvas.width, this.canvas.height, 30);
     for (const t of game.city.trees) {
-      if (!overlaps(view, t.x - t.r, t.y - t.r, t.r * 2, t.r * 2)) continue;
+      if (!hitsView(view, t.x - t.r, t.y - t.r, t.r * 2, t.r * 2)) continue;
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
       ctx.ellipse(t.x + 3, t.y + 4, t.r, t.r * 0.7, 0, 0, Math.PI * 2);
@@ -247,7 +252,7 @@ export class Renderer {
     }
     // Park benches face the paths.
     for (const bench of game.city.benches) {
-      if (!overlaps(view, bench.x - 12, bench.y - 4, 24, 8)) continue;
+      if (!hitsView(view, bench.x - 12, bench.y - 4, 24, 8)) continue;
       ctx.save();
       ctx.translate(bench.x, bench.y);
       ctx.rotate(bench.angle);
@@ -264,7 +269,7 @@ export class Renderer {
     // Food stalls: striped awning and counter.
     for (const ped of game.crowd.peds) {
       if (ped.kind !== 'vendor' || ped.state === 'down') continue;
-      if (!overlaps(view, ped.x - 30, ped.y - 30, 60, 60)) continue;
+      if (!hitsView(view, ped.x - 30, ped.y - 30, 60, 60)) continue;
       ctx.save();
       ctx.translate(ped.x, ped.y);
       ctx.rotate(ped.angle);
@@ -282,7 +287,7 @@ export class Renderer {
     }
     // Stunt ramps: chevron boards across the road.
     for (const ramp of game.stunts.ramps) {
-      if (!overlaps(view, ramp.x - 30, ramp.y - 30, 60, 60)) continue;
+      if (!hitsView(view, ramp.x - 30, ramp.y - 30, 60, 60)) continue;
       ctx.save();
       ctx.translate(ramp.x, ramp.y);
       ctx.rotate(ramp.angle);
@@ -296,7 +301,7 @@ export class Renderer {
     }
   }
 
-  drawStashes(ctx, game) {
+  paintStashes(ctx, game) {
     for (const pkg of game.missions.packages) {
       if (pkg.found) continue;
       const pulse = 1 + Math.sin(this.time * 4) * 0.15;
@@ -313,7 +318,7 @@ export class Renderer {
 
   // Pickups on the ground: ammo crates, medkits, dropped wallets.
   // Each one pulses so a Marco on foot can spot it from a distance.
-  drawPickups(ctx, game) {
+  paintPickups(ctx, game) {
     for (const item of game.pickups.items) {
       if (item.taken) continue;
       const pulse = 1 + Math.sin(this.time * 4 + item.x) * 0.12;
@@ -349,7 +354,7 @@ export class Renderer {
 
   // The street-race start pad by the stadium, and the next
   // checkpoint flag while a race is running.
-  drawRacePad(ctx, game) {
+  paintRacePad(ctx, game) {
     const race = game.races;
     if (!race) return;
     const pad = race.pad;
@@ -387,8 +392,8 @@ export class Renderer {
   }
 
   // Mission marker, taxi marker, courier marker and the bank-robbery ring.
-  drawMarkers(ctx, game) {
-    const marker = (x, y, color, label) => {
+  paintMarkers(ctx, game) {
+    const pin = (x, y, color, label) => {
       const bob = Math.sin(this.time * 3) * 4;
       ctx.save();
       ctx.translate(x, y + bob);
@@ -421,15 +426,15 @@ export class Renderer {
       }
     };
     const target = game.missions.currentTarget();
-    if (target) marker(target.x, target.y, '#ffd23f', game.missions.currentStep().text);
+    if (target) pin(target.x, target.y, '#ffd23f', game.missions.currentStep().text);
     const taxi = game.missions.taxi;
     if (taxi) {
       const stop = taxi.stage === 'pickup' ? taxi.pickup : taxi.drop;
-      marker(stop.x, stop.y, '#58d068', taxi.stage === 'pickup' ? 'PICKUP' : 'DROP-OFF');
+      pin(stop.x, stop.y, '#58d068', taxi.stage === 'pickup' ? 'PICKUP' : 'DROP-OFF');
     }
     const courier = game.missions.courier;
     if (courier) {
-      marker(courier.target.x, courier.target.y, '#7fd0ff', courier.label);
+      pin(courier.target.x, courier.target.y, '#7fd0ff', courier.label);
     }
     const step = game.missions.currentStep();
     if (step && step.type === 'rob') {
@@ -444,19 +449,19 @@ export class Renderer {
 
   // --- actors ---
 
-  drawPeople(ctx, game) {
+  paintPeople(ctx, game) {
     for (const ped of game.crowd.peds) {
-      this.drawPerson(ctx, ped.x, ped.y, ped.angle, ped.color, ped.skin, ped.state === 'down');
+      this.paintPerson(ctx, ped.x, ped.y, ped.angle, ped.color, ped.skin, ped.state === 'down');
     }
     for (const member of game.gangs.members) {
-      this.drawPerson(ctx, member.x, member.y, member.angle, member.color, member.skin, member.state === 'down');
+      this.paintPerson(ctx, member.x, member.y, member.angle, member.color, member.skin, member.state === 'down');
     }
     for (const cop of game.cops) {
-      this.drawPerson(ctx, cop.x, cop.y, cop.angle, '#20242e', '#f0c8a0', cop.state === 'down', true);
+      this.paintPerson(ctx, cop.x, cop.y, cop.angle, '#20242e', '#f0c8a0', cop.state === 'down', true);
     }
   }
 
-  drawPerson(ctx, x, y, angle, shirt, skin, down, isCop = false) {
+  paintPerson(ctx, x, y, angle, shirt, skin, down, isCop = false) {
     ctx.save();
     ctx.translate(x, y);
     if (down) {
@@ -499,15 +504,15 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawCars(ctx, game) {
+  paintCars(ctx, game) {
     const ordered = [...game.traffic.cars].sort((a, b) => a.y - b.y);
     for (const car of ordered) {
-      if (car !== game.playerCar) this.drawCar(ctx, car, game);
+      if (car !== game.playerCar) this.paintCar(ctx, car, game);
     }
-    if (game.playerCar) this.drawCar(ctx, game.playerCar, game);
+    if (game.playerCar) this.paintCar(ctx, game.playerCar, game);
   }
 
-  drawCar(ctx, car, game) {
+  paintCar(ctx, car, game) {
     const lift = car.airHeight || 0;
     ctx.save();
     ctx.translate(car.x, car.y - lift);
@@ -629,10 +634,10 @@ export class Renderer {
     }
   }
 
-  drawPlayer(ctx, game) {
+  paintPlayer(ctx, game) {
     const p = game.player;
     if (p.inCar) return;
-    this.drawPerson(ctx, p.x, p.y, p.angle, '#e33f2f', '#f0c8a0', false);
+    this.paintPerson(ctx, p.x, p.y, p.angle, '#e33f2f', '#f0c8a0', false);
     if (p.weapon === 'pistol') {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -652,7 +657,7 @@ export class Renderer {
   }
 
   // The police helicopter: dark body, spinning rotor, spotlight cone tracking Marco.
-  drawHelicopter(ctx, game) {
+  paintHelicopter(ctx, game) {
     const heli = game.police && game.police.heli;
     if (!heli) return;
     const p = game.player;
@@ -703,7 +708,7 @@ export class Renderer {
   }
 
   // Spike strips at five stars: a dark band with steel teeth.
-  drawSpikes(ctx, game) {
+  paintSpikes(ctx, game) {
     const spikes = game.police ? game.police.spikes : [];
     for (const strip of spikes) {
       ctx.save();
@@ -726,7 +731,7 @@ export class Renderer {
 
   // --- effects and light ---
 
-  drawEffects(ctx, game) {
+  paintEffects(ctx, game) {
     for (const pt of game.particles) {
       ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
       ctx.fillStyle = pt.color;
@@ -756,7 +761,7 @@ export class Renderer {
   }
 
   // A warm sunset wash, stronger toward the screen edges.
-  drawSunset(ctx) {
+  paintSunset(ctx) {
     const cx = this.cam.x + this.canvas.width / 2;
     const cy = this.cam.y + this.canvas.height / 2;
     const glow = ctx.createRadialGradient(cx, cy, 200, cx, cy, 900);
@@ -768,7 +773,7 @@ export class Renderer {
 
   // --- minimap ---
 
-  drawMinimap(game) {
+  paintMinimap(game) {
     const mm = this.mm;
     const mw = 190;
     const mh = 138;
@@ -806,6 +811,12 @@ export class Renderer {
     }
     const courier = game.missions.courier;
     if (courier) blip(courier.target.x, courier.target.y, 4, '#7fd0ff');
+    // Side-job blips: fares, targets, pizza stops, hidden packages.
+    if (game.sidejobs) {
+      for (const b of game.sidejobs.blips()) {
+        blip(b.x, b.y, b.small ? 1.5 : 3, b.color);
+      }
+    }
     // Police blips in blue; the helicopter in red.
     for (const car of game.traffic.cars) {
       if (car.police && !car.dead) blip(car.x, car.y, 2.5, '#4a90ff');
