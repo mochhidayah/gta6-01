@@ -14,3 +14,5 @@ node_modules/
 # Local screenshots staging — the final four live in screenshots/.
 shots/
 tmp/
+
+# v4: the game still has no dependencies and no build output besides out/.

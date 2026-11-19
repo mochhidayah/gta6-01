@@ -9,7 +9,8 @@
 // development convenience, not a web server for the internet.
 // With --log it prints one line per request (method, path, status),
 // so a broken asset shows up in the terminal instead of silently
-// failing in the browser.
+// failing in the browser. v4 rewrote this file wholesale — same
+// routes, same guards, new structure.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -48,8 +49,6 @@ function parsePort(argv) {
   return Number.isInteger(value) && value > 0 && value < 65536 ? value : 8080;
 }
 
-const port = parsePort(process.argv.slice(2));
-
 // --host binds the server somewhere else (default loopback only);
 // pass 0.0.0.0 to play from another device on your own network.
 function parseHost(argv) {
@@ -58,10 +57,15 @@ function parseHost(argv) {
   return argv[flag + 1];
 }
 
-const host = parseHost(process.argv.slice(2));
-
 // --log prints one line per request to stdout.
-const logging = process.argv.includes('--log');
+function parseLogging(argv) {
+  return argv.includes('--log');
+}
+
+const port = parsePort(process.argv.slice(2));
+const host = parseHost(process.argv.slice(2));
+const logging = parseLogging(process.argv.slice(2));
+
 function logRequest(method, pathname, status) {
   if (!logging) return;
   const stamp = new Date().toISOString().slice(11, 19);

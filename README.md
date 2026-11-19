@@ -13,6 +13,18 @@ a bank job, a night-shift courier rush, a turf war, one last dockside heist, and
 a street race at the stadium, payback at the docks, and a clean slate at the airfield — plus taxi
 fares, courier runs, street races, daily challenges and hidden cash stashes in free roam.
 
+## What's new in v4
+
+- **Radio** — three stations with real songs: PALMERA FM 88.5, BAY ROCK 101.1 and CORAL NIGHT 94.7,
+  each with its own tracks, DJ chatter and a banner you can click. Press **R** to switch stations;
+  the tempo quickens as the wanted level climbs. **M** in the pause menu mutes it.
+- **Side jobs** — taxi fares with chatty passengers and tips, vigilante takedowns, pizza delivery
+  runs, and 30 hidden packages stashed across the map with a tracker (press **E** near a fare or
+  a target to start one).
+- **Cutscenes** — a scripted intro when a new game starts, and a briefing scene before most
+  missions: dialogue, camera pans and code-drawn portraits of Marco, Lucia, Rico, Dana, Vex
+  and Kane. Space, Enter or click advances the dialogue.
+
 ## What's new in v3
 
 - **Day/night cycle** — the clock runs from a 17:00 sunset into a dark night (20:00–05:00) with
@@ -63,7 +75,7 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
   tracker (title, step, timer), a helicopter-watching alert, speed, weapon, radio station,
   in-game clock, and a live minimap with mission and police blips.
 - **Sound and music** — everything synthesised live with WebAudio: engine, sirens, gunshots,
-  and three radio stations (Sunset FM, Radio Palma, Night Drive). Press **R** to change station.
+  and three radio stations (PALMERA FM, BAY ROCK, CORAL NIGHT). Press **R** to change station.
 - **Save** — progress (missions done, money) persists in localStorage; continue from the menu.
 
 ## Controls
@@ -71,12 +83,12 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 | Key | Action |
 | --- | --- |
 | WASD / arrows | Move / drive |
-| E | Steal & enter car / exit car / buy snack at a vendor |
+| E | Steal & enter car / exit car / buy snack at a vendor / start a side job nearby |
 | Mouse + click | Aim / shoot pistol |
-| Space | Punch (on foot) / handbrake (driving) |
+| Space | Punch (on foot) / handbrake (driving) / advance cutscene dialogue |
 | Shift | Sprint |
 | H | Honk |
-| M | Next mission |
+| M | Next mission (pause menu: mute radio) |
 | T | Start street race (at the stadium pad) |
 | C | Photo mode |
 | Mouse wheel | Cycle weapon (fists / pistol) |
@@ -88,7 +100,8 @@ No build step, no network requests: `game/index.html` plus its modules under `ga
 
 - `game/` — the game itself: `index.html` and `src/` (one job per file: config, rng, city,
   vehicles, people, missions, police, render, hud, input, audio, shots, plus the v3 systems
-  daynight, races, stats, pickups, photomode and challenges).
+  daynight, races, stats, pickups, photomode and challenges, plus the v4 systems radio,
+  sidejobs and cutscenes).
 - `main.ts` — the entry program: copies `game/` and `screenshots/` to `/output` and writes
   `dossier.json` with the vendored make.fun library.
 - `screenshots/` — four real renders of the game running in a browser.
