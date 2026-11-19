@@ -12,7 +12,7 @@
 import { distSq, PICKUP_RULES } from './config.js';
 import { gauss } from './rng.js';
 
-const GRAB_R = 40;
+const TAKE_R = 40;
 // What each pickup gives and how fast it returns lives in
 // config.js (PICKUP_RULES).
 const AMMO = PICKUP_RULES.ammoRounds;
@@ -21,7 +21,7 @@ const CASH = PICKUP_RULES.cashAmount;
 const RESPAWN = PICKUP_RULES.respawnSeconds;
 
 // Fixed spots: what waits there, and where.
-const SPOTS = [
+const PICKUP_SPOTS = [
   { kind: 'ammo', place: 'pawnshop', dx: -70, dy: 40 },
   { kind: 'ammo', place: 'stadium', dx: 90, dy: -60 },
   { kind: 'ammo', place: 'docks', dx: -80, dy: 30 },
@@ -36,12 +36,12 @@ const SPOTS = [
 
 export class Pickups {
   constructor(city) {
-    this.items = SPOTS.map((def) => {
-      const spot = city.landmarks[def.place];
+    this.items = PICKUP_SPOTS.map((spec) => {
+      const mark = city.landmarks[spec.place];
       return {
-        kind: def.kind,
-        x: spot.x + def.dx,
-        y: spot.y + def.dy,
+        kind: spec.kind,
+        x: mark.x + spec.dx,
+        y: mark.y + spec.dy,
         taken: false,
         respawn: 0,
       };
@@ -49,53 +49,53 @@ export class Pickups {
   }
 
   update(dt, game) {
-    const hero = game.player;
+    const marco = game.player;
     for (const item of this.items) {
       if (item.taken) {
         item.respawn -= dt;
         if (item.respawn <= 0) item.taken = false;
         continue;
       }
-      if (hero.inCar) continue;
-      if (distSq(hero.x, hero.y, item.x, item.y) > GRAB_R * GRAB_R) continue;
+      if (marco.inCar) continue;
+      if (distSq(marco.x, marco.y, item.x, item.y) > TAKE_R * TAKE_R) continue;
       this.grab(item, game);
     }
   }
 
   grab(item, game) {
-    const hero = game.player;
+    const marco = game.player;
     item.taken = true;
     // The respawn delay wobbles around 50 seconds so the city never
     // feels metronomic.
     item.respawn = gauss(game.rng, RESPAWN, 5, 40, 60);
     if (item.kind === 'ammo') {
-      if (hero.weapon !== 'pistol') {
-        hero.weapon = 'pistol';
-        hero.ammo = AMMO;
+      if (marco.weapon !== 'pistol') {
+        marco.weapon = 'pistol';
+        marco.ammo = AMMO;
         game.hud.toast('PISTOL FOUND', `An ammo box with a pistol inside — ${AMMO} rounds. Press 2 to draw it.`, 4);
       } else {
-        hero.ammo += AMMO;
-        game.hud.toast('AMMO', `+${AMMO} rounds — ${hero.ammo} in the mag.`, 3);
+        marco.ammo += AMMO;
+        game.hud.toast('AMMO', `+${AMMO} rounds — ${marco.ammo} in the mag.`, 3);
       }
       game.sounds.pickup();
       game.addParticles(item.x, item.y, 8, '#f2c230');
       return;
     }
     if (item.kind === 'health') {
-      if (hero.health >= 100) {
+      if (marco.health >= 100) {
         // Full health: leave the kit where it is.
         item.taken = false;
         item.respawn = 0;
         return;
       }
-      hero.heal(HEAL);
+      marco.heal(HEAL);
       game.sounds.pickup();
       game.addParticles(item.x, item.y, 8, '#58d068');
       game.hud.toast('MEDKIT', `+${HEAL} HP — patched up and back in the fight.`, 3);
       return;
     }
     // Cash: a dropped wallet, finders keepers.
-    hero.money += CASH;
+    marco.money += CASH;
     if (game.stats) game.stats.recordEarned(CASH);
     game.sounds.cash();
     game.addParticles(item.x, item.y, 10, '#7dff8a');
