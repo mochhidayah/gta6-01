@@ -112,6 +112,39 @@ export const STORY = [
       { type: 'escape', stars: 4, text: 'Escape! Lose the 4-star wanted level', radius: 0 },
     ],
   },
+  {
+    id: 'm11',
+    title: 'Street King',
+    pay: 2000,
+    brief: 'The stadium crowd runs an illegal street race after dark. Line up at the start pad by the stadium, beat three rivals across the city — airfield, marina, docks, club — and take the crown.',
+    steps: [
+      { type: 'goto', place: 'stadium', text: 'Get to Bay Sharks Stadium — the race starts there', radius: 120 },
+      { type: 'race', text: 'Win the street race — press T on the start pad' },
+      { type: 'escape', stars: 2, text: 'Escape! Lose the 2-star wanted level', radius: 0 },
+    ],
+  },
+  {
+    id: 'm12',
+    title: 'Payback',
+    pay: 2200,
+    brief: 'The Vipers torched a Solano garage truck and laughed about it. Six of them are hanging around the South Docks — put them down, then disappear before the precinct arrives.',
+    steps: [
+      { type: 'goto', place: 'docks', text: 'Get to the South Docks — the Vipers are waiting', radius: 100 },
+      { type: 'defeat', crew: 'Vipers', count: 6, text: 'Drop 6 Vipers (fists or pistol — your call)' },
+      { type: 'escape', stars: 3, text: 'Escape! Lose the 3-star wanted level', radius: 0 },
+    ],
+  },
+  {
+    id: 'm13',
+    title: 'Clean Slate',
+    pay: 2800,
+    brief: 'One last favour for Lucia, then the debt is paid and Marco is free: lift a Coral Coupe from uptown, run it to Palmera Airfield, and lose the tail on the way.',
+    steps: [
+      { type: 'stealModel', model: 'Coral Coupe', text: 'Steal a Coral Coupe (the pink one — hard to miss)' },
+      { type: 'goto', place: 'airport', text: 'Run it to Palmera Airfield', radius: 95, timer: 100 },
+      { type: 'escape', stars: 2, text: 'Escape! Lose the 2-star wanted level', radius: 0 },
+    ],
+  },
 ];
 
 function positionOf(game) {
@@ -144,10 +177,17 @@ export class MissionManager {
     this.packages = []; // hidden cash stashes {x, y, found}
     this.vanReady = false; // the m6 armored van has been parked at the stadium
     this.warReady = false; // the m9 Sharks have been mustered at the stadium
+    this.viperReady = false; // the m12 Vipers have been mustered at the docks
+    this.coupeReady = false; // the m13 Coral Coupe has been parked uptown
   }
 
   get storyDone() {
     return this.storyIndex >= STORY.length;
+  }
+
+  // How many story jobs the game holds (the HUD counts down from this).
+  get total() {
+    return STORY.length;
   }
 
   startStory() {
@@ -167,6 +207,20 @@ export class MissionManager {
     if (def.id === 'm10') {
       const spot = this.game.city.landmarks.garage;
       this.game.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
+    }
+    if (def.id === 'm11') {
+      // A fresh race: the win flag from any earlier race does not count.
+      this.game.races.won = false;
+    }
+    if (def.id === 'm12' && !this.viperReady) {
+      const spot = this.game.city.landmarks.docks;
+      this.game.gangs.spawnCrew('Vipers', 6, spot.x, spot.y);
+      this.viperReady = true;
+    }
+    if (def.id === 'm13' && !this.coupeReady) {
+      const spot = this.game.city.landmarks.policeHQ;
+      this.game.traffic.spawnModel('Coral Coupe', spot.x - 80, spot.y + 40);
+      this.coupeReady = true;
     }
     this.announce(def);
     return true;
@@ -200,6 +254,10 @@ export class MissionManager {
     const g = this.game;
     const def = this.active.def;
     g.player.money += def.pay;
+    if (g.stats) {
+      g.stats.recordEarned(def.pay);
+      g.stats.recordJob();
+    }
     g.sounds.missionDone();
     g.sounds.cash();
     g.toast('MISSION COMPLETE', `${def.title} — earned $${def.pay}`, 6);
@@ -258,6 +316,7 @@ export class MissionManager {
       rob: this.stepRob,
       escape: this.stepEscape,
       defeat: this.stepDefeat,
+      race: this.stepRace,
     };
   }
 
@@ -327,6 +386,16 @@ export class MissionManager {
     }
   }
 
+  // The street-race step (m11): done the moment a race is won.
+  // The race itself lives in races.js; this step just watches the flag.
+  stepRace() {
+    const g = this.game;
+    if (g.races && g.races.wonRace) {
+      g.toast('STREET KING', 'You beat the stadium field — the crown is yours.', 4);
+      this.nextStep();
+    }
+  }
+
   // --- Taxi fares (side activity) ---
 
   offerTaxi() {
@@ -356,6 +425,10 @@ export class MissionManager {
       }
     } else if (within(car.x, car.y, this.taxi.drop, 80)) {
       g.player.money += this.taxi.pay;
+      if (g.stats) {
+        g.stats.recordEarned(this.taxi.pay);
+        g.stats.recordFare();
+      }
       g.sounds.cash();
       g.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
       this.taxi = null;
@@ -393,6 +466,7 @@ export class MissionManager {
     } else if (event === 'delivered') {
       const bonus = this.courier.speedBonus;
       g.player.money += this.courier.pay + bonus;
+      if (g.stats) g.stats.recordEarned(this.courier.pay + bonus);
       g.sounds.cash();
       g.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
       this.courier = null;
@@ -429,6 +503,10 @@ export class MissionManager {
       pkg.found = true;
       this.packagesFound += 1;
       p.money += 150;
+      if (g.stats) {
+        g.stats.recordEarned(150);
+        g.stats.recordStash();
+      }
       g.sounds.cash();
       g.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
       g.addParticles(pkg.x, pkg.y, 12, '#f2c230');
