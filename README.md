@@ -13,6 +13,14 @@ a bank job, a night-shift courier rush, a turf war, one last dockside heist, and
 a street race at the stadium, payback at the docks, and a clean slate at the airfield — plus taxi
 fares, courier runs, street races, daily challenges and hidden cash stashes in free roam.
 
+## What's new in v6
+
+- **Authored rebuild** — the twelve dossier files were rewritten in one session under a fresh
+  recording (the v5 recording was lost to a seal chunk race): radio, side jobs and cutscenes
+  lead the dossier again, the city map is byte-identical to v5 (same seed, same streets),
+  and the whole dossier now fits under the 163,840-byte cap with room to spare.
+- **Fixed** — the `cue-height` typo in the cutscene dialogue box is now `line-height`.
+
 ## What's new in v5
 
 - **Authored rebuild** — the big systems (radio, side jobs, cutscenes, missions, render,

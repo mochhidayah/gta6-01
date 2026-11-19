@@ -15,4 +15,4 @@ node_modules/
 shots/
 tmp/
 
-# v5: the game still has no dependencies and no build output besides out/.
+# v6: the game still has no dependencies and no build output besides out/.
