@@ -1,7 +1,7 @@
 // PoliceDirector: the wanted level, cruisers, foot cops, the
 // helicopter, and roadblocks. Stars only fall while nobody can
 // see Marco: sight is distance plus a building check, so walls
-// and alleys are real cover. v4 rewrote this file wholesale — same
+// and alleys are real cover. v6 rewrote this file wholesale — same
 // heat, same chases, new internal names.
 import { WANTED_RULES, distSq } from './config.js';
 import { Ped } from './people.js';
@@ -20,17 +20,17 @@ const QUIET_SECONDS = WANTED_RULES.coolOffDelay;
 const SECONDS_PER_STAR = WANTED_RULES.coolOffStep;
 
 // Sight check: sample points along the line; any inside a building blocks the view.
-function blockedByBuilding(game, x1, y1, x2, y2) {
+function wallBetween(game, x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const len = Math.hypot(dx, dy);
-  const steps = Math.max(1, Math.floor(len / 45));
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps;
-    const px = x1 + dx * t;
-    const py = y1 + dy * t;
-    for (const blk of game.city.buildings) {
-      if (px >= blk.x && px <= blk.x + blk.w && py >= blk.y && py <= blk.y + blk.h) return true;
+  const dist = Math.hypot(dx, dy);
+  const cuts = Math.max(1, Math.floor(dist / 45));
+  for (let i = 1; i < cuts; i++) {
+    const f = i / cuts;
+    const sx = x1 + dx * f;
+    const sy = y1 + dy * f;
+    for (const b of game.city.buildings) {
+      if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) return true;
     }
   }
   return false;
@@ -38,12 +38,12 @@ function blockedByBuilding(game, x1, y1, x2, y2) {
 
 // Can this watcher see Marco? Close, no wall between. The helicopter sees over rooftops.
 function canSee(game, wx, wy, range, fromAir) {
-  const hero = game.player;
-  const px = hero.inCar && game.playerCar ? game.playerCar.x : hero.x;
-  const py = hero.inCar && game.playerCar ? game.playerCar.y : hero.y;
-  if (distSq(wx, wy, px, py) > range * range) return false;
+  const marco = game.player;
+  const tx = marco.inCar && game.playerCar ? game.playerCar.x : marco.x;
+  const ty = marco.inCar && game.playerCar ? game.playerCar.y : marco.y;
+  if (distSq(wx, wy, tx, ty) > range * range) return false;
   if (fromAir) return true;
-  return !blockedByBuilding(game, wx, wy, px, py);
+  return !wallBetween(game, wx, wy, tx, ty);
 }
 
 export class PoliceDirector {
@@ -65,9 +65,9 @@ export class PoliceDirector {
 
   playerPos() {
     const g = this.game;
-    const hero = g.player;
-    if (hero.inCar && g.playerCar) return { x: g.playerCar.x, y: g.playerCar.y };
-    return { x: hero.x, y: hero.y };
+    const marco = g.player;
+    if (marco.inCar && g.playerCar) return { x: g.playerCar.x, y: g.playerCar.y };
+    return { x: marco.x, y: marco.y };
   }
 
   policeCars() {
@@ -83,10 +83,10 @@ export class PoliceDirector {
     g.lastCrimeAt = g.elapsed;
     this.quietFor = 0;
     if (!silent && message) g.hud.toast('WANTED', message, 3);
-    const target = Math.min(5, Math.floor(g.crimeHeat));
-    if (target > g.wanted) {
-      g.wanted = target;
-      this.peakWanted = Math.max(this.peakWanted, target);
+    const level = Math.min(5, Math.floor(g.crimeHeat));
+    if (level > g.wanted) {
+      g.wanted = level;
+      this.peakWanted = Math.max(this.peakWanted, level);
       g.sounds.setSiren(g.wanted > 0);
       if (g.wanted >= 3) {
         g.hud.toast('HEAT IS ON', `${g.wanted}-star wanted level — the precinct is coming.`, 4);
@@ -168,9 +168,9 @@ export class PoliceDirector {
     this.quietFor += dt;
     if (this.quietFor < QUIET_SECONDS) return;
     g.crimeHeat -= dt / SECONDS_PER_STAR;
-    const target = Math.max(0, Math.floor(g.crimeHeat));
-    if (target < g.wanted) {
-      g.wanted = target;
+    const level = Math.max(0, Math.floor(g.crimeHeat));
+    if (level < g.wanted) {
+      g.wanted = level;
       if (g.wanted === 0) {
         g.sounds.setSiren(false);
         this.heliToasted = false;
@@ -188,14 +188,14 @@ export class PoliceDirector {
   spawnCruisers(dt) {
     const g = this.game;
     this.spawnTimer -= dt;
-    const want = g.wanted >= 4 ? 4 : g.wanted >= 2 ? 3 : 1;
-    if (this.spawnTimer > 0 || this.policeCars() >= want) return;
+    const count = g.wanted >= 4 ? 4 : g.wanted >= 2 ? 3 : 1;
+    if (this.spawnTimer > 0 || this.policeCars() >= count) return;
     this.spawnTimer = 2.5;
-    const pos = this.playerPos();
+    const at = this.playerPos();
     const angle = Math.random() * Math.PI * 2;
-    const dist = 700 + Math.random() * 300;
-    const spot = g.roadPointNear(pos.x + Math.cos(angle) * dist, pos.y + Math.sin(angle) * dist);
-    const car = g.traffic.spawnPolice(spot.x, spot.y, Math.atan2(pos.y - spot.y, pos.x - spot.x));
+    const away = 700 + Math.random() * 300;
+    const place = g.roadPointNear(at.x + Math.cos(angle) * away, at.y + Math.sin(angle) * away);
+    const car = g.traffic.spawnPolice(place.x, place.y, Math.atan2(at.y - place.y, at.x - place.x));
     car.siren = true;
     g.sounds.horn();
   }
@@ -204,13 +204,13 @@ export class PoliceDirector {
 
   spawnFootCops(dt) {
     const g = this.game;
-    const hero = g.player;
+    const marco = g.player;
     this.copTimer -= dt;
-    if (hero.inCar || g.wanted < 1) return;
+    if (marco.inCar || g.wanted < 1) return;
     if (this.copTimer > 0 || g.cops.length >= Math.min(3, g.wanted)) return;
     this.copTimer = 4;
     const angle = Math.random() * Math.PI * 2;
-    const cop = new Ped(hero.x + Math.cos(angle) * 380, hero.y + Math.sin(angle) * 380, g.rng);
+    const cop = new Ped(marco.x + Math.cos(angle) * 380, marco.y + Math.sin(angle) * 380, g.rng);
     cop.color = '#20242e';
     cop.speed = 125 + g.wanted * 14; // faster than a stroll, slower than a sprint
     cop.state = 'stroll';
@@ -220,27 +220,27 @@ export class PoliceDirector {
 
   updateCops(dt) {
     const g = this.game;
-    const hero = g.player;
+    const marco = g.player;
     for (const cop of g.cops) {
       if (cop.state === 'down') continue;
-      const dx = hero.x - cop.x;
-      const dy = hero.y - cop.y;
+      const dx = marco.x - cop.x;
+      const dy = marco.y - cop.y;
       const d = Math.hypot(dx, dy);
       if (d < 26) {
         g.bustPlayer();
         return;
       }
       cop.angle = Math.atan2(dy, dx);
-      const speed = hero.inCar ? cop.speed * 0.4 : cop.speed * 1.25;
-      cop.x += Math.cos(cop.angle) * speed * dt;
-      cop.y += Math.sin(cop.angle) * speed * dt;
+      const pace = marco.inCar ? cop.speed * 0.4 : cop.speed * 1.25;
+      cop.x += Math.cos(cop.angle) * pace * dt;
+      cop.y += Math.sin(cop.angle) * pace * dt;
       const push = g.city.collideCircle(cop.x, cop.y, cop.r);
       if (push) {
         cop.x += push.x;
         cop.y += push.y;
       }
     }
-    g.cops = g.cops.filter((cop) => cop.state !== 'down' || distSq(cop.x, cop.y, hero.x, hero.y) < 700 * 700);
+    g.cops = g.cops.filter((cop) => cop.state !== 'down' || distSq(cop.x, cop.y, marco.x, marco.y) < 700 * 700);
   }
 
   // --- helicopter ---
@@ -256,18 +256,18 @@ export class PoliceDirector {
       return;
     }
     if (!this.heli) {
-      const pos = this.playerPos();
-      this.heli = { x: pos.x + HELI_ORBIT, y: pos.y - HELI_ORBIT, angle: 0, orbit: 0, watching: false };
+      const at = this.playerPos();
+      this.heli = { x: at.x + HELI_ORBIT, y: at.y - HELI_ORBIT, angle: 0, orbit: 0, watching: false };
       g.sounds.heliBuzz();
     }
-    const pos = this.playerPos();
+    const at = this.playerPos();
     const h = this.heli;
     h.orbit += dt * 0.55; // slow circle overhead
-    const wantX = pos.x + Math.cos(h.orbit) * HELI_ORBIT;
-    const wantY = pos.y + Math.sin(h.orbit) * HELI_ORBIT;
-    h.x += (wantX - h.x) * Math.min(1, dt * 2);
-    h.y += (wantY - h.y) * Math.min(1, dt * 2);
-    h.angle = Math.atan2(pos.y - h.y, pos.x - h.x);
+    const goalX = at.x + Math.cos(h.orbit) * HELI_ORBIT;
+    const goalY = at.y + Math.sin(h.orbit) * HELI_ORBIT;
+    h.x += (goalX - h.x) * Math.min(1, dt * 2);
+    h.y += (goalY - h.y) * Math.min(1, dt * 2);
+    h.angle = Math.atan2(at.y - h.y, at.x - h.x);
     h.watching = this.watched;
   }
 
@@ -288,46 +288,46 @@ export class PoliceDirector {
       return;
     }
     this.blockTimer -= dt;
-    const pos = this.playerPos();
+    const at = this.playerPos();
     for (const block of this.blocks) {
-      const behind = (pos.x - block.x) * Math.cos(block.angle) + (pos.y - block.y) * Math.sin(block.angle);
-      if (behind > 320) block.passed = true;
+      const past = (at.x - block.x) * Math.cos(block.angle) + (at.y - block.y) * Math.sin(block.angle);
+      if (past > 320) block.passed = true;
     }
-    this.blocks = this.blocks.filter((blk) => !blk.passed);
+    this.blocks = this.blocks.filter((b) => !b.passed);
     if (this.blockTimer > 0 || this.blocks.length >= 1) return;
     this.blockTimer = BLOCK_EVERY;
-    this.layBlock(pos);
+    this.layBlock(at);
   }
 
   // Two cruisers parked across the road ahead of Marco.
   layBlock(pos) {
     const g = this.game;
-    const hero = g.player;
-    const heading = hero.inCar && g.playerCar ? g.playerCar.angle : hero.angle;
-    const ahead = 520;
-    const cx = pos.x + Math.cos(heading) * ahead;
-    const cy = pos.y + Math.sin(heading) * ahead;
-    const spot = g.roadPointNear(cx, cy);
+    const marco = g.player;
+    const heading = marco.inCar && g.playerCar ? g.playerCar.angle : marco.angle;
+    const far = 520;
+    const bx = pos.x + Math.cos(heading) * far;
+    const by = pos.y + Math.sin(heading) * far;
+    const place = g.roadPointNear(bx, by);
     const across = heading + Math.PI / 2; // park across the road
     const cars = [];
-    for (const off of [-30, 30]) {
+    for (const gap of [-30, 30]) {
       const car = g.traffic.spawnPolice(
-        spot.x + Math.cos(across) * off,
-        spot.y + Math.sin(across) * off,
+        place.x + Math.cos(across) * gap,
+        place.y + Math.sin(across) * gap,
         across,
       );
       car.driver = 'roadblock';
       car.speed = 0;
       cars.push(car);
     }
-    this.blocks.push({ cars, x: spot.x, y: spot.y, angle: heading, age: 0, passed: false });
+    this.blocks.push({ cars, x: place.x, y: place.y, angle: heading, age: 0, passed: false });
     g.hud.toast('ROADBLOCK AHEAD', 'Cruisers parked across the road — go around or through.', 4);
     g.sounds.horn();
   }
 
   clearBlocks() {
-    for (const block of this.blocks) {
-      for (const car of block.cars) car.dead = true;
+    for (const b of this.blocks) {
+      for (const c of b.cars) c.dead = true;
     }
     this.blocks = [];
   }
@@ -361,11 +361,11 @@ export class PoliceDirector {
     this.spikes = this.spikes.filter((strip) => strip.age < 25);
     if (this.spikeTimer > 0 || this.spikes.length >= 1) return;
     this.spikeTimer = SPIKE_EVERY;
-    const pos = this.playerPos();
-    const hero = g.player;
-    const heading = hero.inCar && car ? car.angle : hero.angle;
-    const spot = g.roadPointNear(pos.x + Math.cos(heading) * 480, pos.y + Math.sin(heading) * 480);
-    this.spikes.push({ x: spot.x, y: spot.y, angle: heading + Math.PI / 2, age: 0 });
+    const at = this.playerPos();
+    const marco = g.player;
+    const heading = marco.inCar && car ? car.angle : marco.angle;
+    const place = g.roadPointNear(at.x + Math.cos(heading) * 480, at.y + Math.sin(heading) * 480);
+    this.spikes.push({ x: place.x, y: place.y, angle: heading + Math.PI / 2, age: 0 });
     g.hud.toast('SPIKES AHEAD', 'The precinct laid spike strips down the road — steer around them.', 4);
   }
 
