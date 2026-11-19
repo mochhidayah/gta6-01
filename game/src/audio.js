@@ -228,6 +228,31 @@ export class SoundBank {
     this.arpeggio([784, 988], 90, 0.12, 'triangle', 0.16);
   }
 
+  // A bright fanfare for an achievement or a finished challenge.
+  achievement() {
+    this.arpeggio([659, 784, 988, 1318], 90, 0.16, 'triangle', 0.2);
+  }
+
+  // A camera shutter: a click and a whirr for photo mode.
+  shutter() {
+    this.burst(0.05, 0.3, 4000);
+    setTimeout(() => this.tone(1200, 0.06, 'sine', 0.08), 90);
+  }
+
+  // Race countdown: one beep per second, then a go!
+  countBeep() {
+    this.tone(440, 0.14, 'square', 0.16);
+  }
+
+  countGo() {
+    this.arpeggio([660, 880], 90, 0.2, 'square', 0.18);
+  }
+
+  // The race winner's fanfare — bigger than a mission chime.
+  raceWin() {
+    this.arpeggio([523, 659, 784, 1046, 1318], 100, 0.2, 'square', 0.16);
+  }
+
   // --- radio ---
 
   nextStation() {

@@ -2,7 +2,7 @@
 // and punishment, and saving. The Game owns the world and the
 // player's state and ticks everything once a frame. Wanted-level
 // rules live in police.js; the Game just asks the director.
-import { SAVE_KEY, ECONOMY, distSq } from './config.js';
+import { SAVE_KEY, ECONOMY, NEAR_MISS, distSq } from './config.js';
 import { City, roadPointNear } from './city.js';
 import { Traffic } from './vehicles.js';
 import { Player, Crowd } from './people.js';
@@ -16,6 +16,12 @@ import { applyShot } from './shots.js';
 import { StuntRamps } from './stunts.js';
 import { Gangs } from './gangs.js';
 import { Weather } from './weather.js';
+import { DayNight } from './daynight.js';
+import { StreetRace } from './races.js';
+import { Stats } from './stats.js';
+import { Pickups } from './pickups.js';
+import { PhotoMode } from './photomode.js';
+import { DailyChallenges } from './challenges.js';
 import { seeded } from './rng.js';
 
 export class Game {
@@ -30,6 +36,13 @@ export class Game {
     this.stunts = new StuntRamps();
     this.gangs = new Gangs(this.city);
     this.weather = new Weather();
+    this.daynight = new DayNight();
+    this.races = new StreetRace(this);
+    this.stats = new Stats();
+    this.pickups = new Pickups(this.city);
+    this.photo = new PhotoMode();
+    this.challenges = new DailyChallenges();
+    this.nearMissTimer = 0;
     this.renderer = new Renderer(this.canvas, document.getElementById('minimap'));
     this.hud = new HUD();
     this.input = new Input(this.canvas);
@@ -79,6 +92,7 @@ export class Game {
     this.missions.storyIndex = this.saveData.missionsDone || 0;
     this.missions.completed = this.saveData.missionsDone || 0;
     if (this.saveData.money) this.player.money = this.saveData.money;
+    if (this.saveData.stats) this.stats.fromJSON(this.saveData.stats);
   }
 
   // ---------- menus ----------
@@ -90,10 +104,10 @@ export class Game {
     this.hud.showMenu(
       'PALMERA BAY',
       `<p class="tag">A sun-soaked open-world crime story — an original game, no borrowed city.</p>
-       <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Ten jobs stand between him and freedom — and a helicopter is watching.</p>
+       <p><b>Marco Solano</b> is back in Palmera Bay with $250 and a debt to pay. Thirteen jobs stand between him and freedom — and a helicopter is watching.</p>
        <p><b>WASD</b> move / drive &nbsp;·&nbsp; <b>E</b> steal car / buy snacks &nbsp;·&nbsp; <b>Mouse</b> aim, <b>Click</b> shoot &nbsp;·&nbsp; <b>Space</b> punch / handbrake<br>
-       <b>M</b> next mission &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>H</b> honk &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>1</b> fists / <b>2</b> pistol</p>
-       <p>Missions, taxi fares, courier runs, hidden stashes, 5-star chases with roadblocks and a helicopter.</p>
+       <b>M</b> next mission &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>H</b> honk &nbsp;·&nbsp; <b>T</b> street race &nbsp;·&nbsp; <b>C</b> photo mode &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>1</b> fists / <b>2</b> pistol</p>
+       <p>Missions, taxi fares, courier runs, street races, hidden stashes, 5-star chases with roadblocks and a helicopter.</p>
        ${hasSave ? `<p>Save found: ${this.saveData.missionsDone} mission(s) done, $${this.saveData.money} in pocket.</p>` : ''}`,
       hasSave ? 'ENTER — continue your story    ·    N — new game' : 'Press ENTER to start',
     );
@@ -108,6 +122,8 @@ export class Game {
       this.player.health = 100;
       this.wanted = 0;
       this.crimeHeat = 0;
+      this.stats = new Stats();
+      this.races = new StreetRace(this);
     }
     this.sounds.ensure();
     this.state = 'playing';
@@ -119,7 +135,11 @@ export class Game {
   pauseGame() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
-    this.hud.showMenu('PAUSED', '<p>Take a breath, Marco. The city waits.</p>', 'P / ENTER — resume &nbsp;·&nbsp; M — mute sound');
+    this.hud.showMenu(
+      'PAUSED',
+      `<p>Take a breath, Marco. The city waits.</p><p>${this.stats.summaryLine()}</p><p>Daily challenges: ${this.challenges.doneCount} of ${this.challenges.list.length} done.</p>`,
+      'P / ENTER — resume &nbsp;·&nbsp; M — mute sound',
+    );
   }
 
   resumeGame() {
@@ -234,6 +254,11 @@ export class Game {
       p.hurt(this.playerCar && this.playerCar.bike ? 10 : 6, this);
       this.addCrime(0.4, '', true);
     }
+    // A fragile courier parcel does not survive a hard crash.
+    if ((a === this.playerCar || b === this.playerCar) && this.missions.courier && this.missions.courier.fragile) {
+      this.missions.courier = null;
+      this.hud.toast('PARCEL SMASHED', 'The fragile parcel broke in the crash — the client wants words.', 4);
+    }
     a.damage(speed * 0.06, this);
     b.damage(speed * 0.06, this);
     this.crowd.scareNear((a.x + b.x) / 2, (a.y + b.y) / 2, 160);
@@ -296,6 +321,7 @@ export class Game {
           missionsDone: this.missions.storyIndex,
           money: this.player.money,
           packages: this.missions.packagesFound,
+          stats: this.stats.toJSON(),
         }),
       );
     } catch {
@@ -318,6 +344,16 @@ export class Game {
     const dt = Math.min(0.05, (now - this.lastT) / 1000);
     this.lastT = now;
     const input = this.input;
+    // Photo mode freezes the world: pan the camera, draw the frame,
+    // and skip every system update until the player resumes.
+    if (this.photo.active) {
+      if (input.wasPressed('KeyC') || input.wasPressed('Escape')) this.photo.exit(this);
+      this.photo.pan(dt, input, this);
+      this.renderer.draw(this);
+      this.photo.drawFrame(this.renderer.ctx, this.canvas);
+      input.endFrame();
+      return;
+    }
     if (this.state === 'playing') {
       this.updatePlaying(dt);
       return;
@@ -354,6 +390,20 @@ export class Game {
       this.hud.toast('RADIO', `Now playing: ${this.sounds.nextStation()}`, 2);
     }
     if (input.wasPressed('KeyH')) this.sounds.horn();
+    if (input.wasPressed('KeyT')) {
+      if (!this.races.startRace(this)) {
+        if (this.races.state === 'idle') {
+          this.hud.toast('NO RACE HERE', 'Street races line up at the stadium pad — drive onto it first.', 3);
+        }
+      }
+    }
+    if (input.wasPressed('KeyC')) this.photo.enter(this);
+    // Scroll wheel cycles the weapon: up for the pistol, down for fists.
+    const wheel = input.takeWheel();
+    if (wheel !== 0) {
+      this.player.weapon = wheel > 0 ? 'pistol' : 'fists';
+      this.hud.toast('WEAPON', this.player.weapon === 'pistol' ? 'Pistol ready.' : 'Fists ready.', 1);
+    }
     if (input.wasPressed('Digit1')) p.weapon = 'fists';
     if (input.wasPressed('Digit2')) {
       if (p.ammo > 0) p.weapon = 'pistol';
@@ -381,6 +431,10 @@ export class Game {
     this.missions.updateTaxi(dt);
     this.missions.updateCourier(dt);
     this.missions.checkPackages();
+    this.races.update(dt, this);
+    this.pickups.update(dt, this);
+    this.stats.update(dt, this);
+    this.challenges.update(dt, this);
     this.repopulate(dt);
     this.collectPickups();
     this.tickEffects(dt);
@@ -425,9 +479,15 @@ export class Game {
     if (input.down.KeyA || input.down.ArrowLeft) steer = -1;
     if (input.down.KeyD || input.down.ArrowRight) steer = 1;
     const handbrake = !!input.down.Space;
+    // Held on the grid while the race counts down.
+    if (this.races.locked()) {
+      throttle = 0;
+      steer = 0;
+    }
     car.drive(throttle, steer, handbrake, dt);
     this.stunts.update(dt, car, this);
     this.sounds.setEngine(Math.abs(car.speed) / car.topSpeed, true);
+    this.checkNearMiss(dt, car);
     if (car.skid > 0 && Math.random() < 0.5) {
       this.particles.push({
         x: car.x - Math.cos(car.angle) * 20,
@@ -444,6 +504,7 @@ export class Game {
       if (ped.state === 'down') continue;
       if (distSq(ped.x, ped.y, car.x, car.y) < 26 * 26 && Math.abs(car.speed) > 60) {
         ped.knockDown();
+        this.stats.recordKnockdown();
         this.addCrime(1, 'You ran someone over!');
         this.addParticles(ped.x, ped.y, 10, '#e33f2f');
         this.sounds.crash();
@@ -457,6 +518,28 @@ export class Game {
     }
   }
 
+  // A near miss: threading past a traffic car at speed without
+  // touching it pays $10 and feeds the CLOSE CALL achievement.
+  // The cooldown keeps one long squeeze from paying out twice.
+  checkNearMiss(dt, car) {
+    if (this.nearMissTimer > 0) this.nearMissTimer -= dt;
+    if (Math.abs(car.speed) < NEAR_MISS.minSpeed || this.nearMissTimer > 0) return;
+    for (const other of this.traffic.cars) {
+      if (other === car || other.dead || other.driver === 'police') continue;
+      const d = Math.hypot(other.x - car.x, other.y - car.y);
+      // Close enough to feel, far enough to miss: outside the
+      // collision distance, inside twice the near-miss range.
+      if (d < NEAR_MISS.range + 2 || d > NEAR_MISS.range * 2) continue;
+      this.nearMissTimer = NEAR_MISS.cooldown;
+      this.player.money += NEAR_MISS.reward;
+      this.stats.recordNearMiss();
+      this.stats.recordEarned(NEAR_MISS.reward);
+      this.sounds.pickup();
+      this.hud.toast('NEAR MISS', `+$${NEAR_MISS.reward} — that was inches. The crowd loves it.`, 2);
+      return;
+    }
+  }
+
   walkPlayer(dt, wx, wy) {
     const input = this.input;
     const p = this.player;
@@ -464,7 +547,7 @@ export class Game {
     this.sounds.setEngine(0, false);
     if (input.down.Space) p.punch(this);
     if (input.mouse.held || input.takeClick()) {
-      if (p.weapon === 'pistol') p.shoot(this, wx, wy);
+      if (p.weapon === 'pistol' && p.shoot(this, wx, wy)) this.stats.recordShot();
     }
     if (p.weapon === 'pistol') p.aimAt(wx, wy);
   }

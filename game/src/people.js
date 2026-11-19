@@ -40,7 +40,7 @@ export class Ped {
     this.id = nextPedId++;
     this.x = x;
     this.y = y;
-    this.kind = kind; // walker | jogger | loiterer | vendor | taxiDriver
+    this.kind = kind; // walker | jogger | loiterer | vendor | taxiDriver | tourist
     this.name = choose(rng, PED_NAMES);
     this.color = SHIRT_COLORS[Math.floor(rng() * SHIRT_COLORS.length)];
     this.skin = SKIN_TONES[Math.floor(rng() * SKIN_TONES.length)];
@@ -62,6 +62,21 @@ export class Ped {
       this.target = {
         x: between(rng, 120, 3400),
         y: SHORE.sandY + between(rng, 20, 120),
+      };
+      return;
+    }
+    // Tourists drift between the sights: the marina, the park, the
+    // beachfront — camera out, stopping to take in the view.
+    if (this.kind === 'tourist') {
+      const sights = [
+        { x: 2900, y: 2260 },
+        { x: 1560, y: 800 },
+        { x: 800, y: 2400 },
+      ];
+      const sight = sights[Math.floor(rng() * sights.length)];
+      this.target = {
+        x: sight.x + between(rng, -120, 120),
+        y: sight.y + between(rng, -120, 120),
       };
       return;
     }
@@ -95,6 +110,12 @@ export class Ped {
         this.idleTimer = 1.5 + Math.random();
         this.angle += (Math.random() - 0.5) * 1.2;
       }
+      return;
+    }
+    // A tourist pauses at every sight to take a photo, then drifts on.
+    if (this.kind === 'tourist' && this.idleTimer > 0) {
+      this.idleTimer -= dt;
+      if (this.idleTimer <= 0) this.chooseDestination(rng);
       return;
     }
     if (this.state === 'chat') {
@@ -133,6 +154,8 @@ export class Ped {
     if (d < 12) {
       this.target = null;
       if (this.kind === 'loiterer') this.idleTimer = between(Math.random, 3, 9);
+      // A tourist who arrives at a sight stops to take a photo.
+      if (this.kind === 'tourist') this.idleTimer = between(Math.random, 2, 5);
       return true;
     }
     const want = Math.atan2(dy, dx);
@@ -267,10 +290,12 @@ export class Player {
         game.addCrime(1, `You dropped a ${member.crew.name}! Their crew saw that.`);
         game.addParticles(member.x, member.y, 8, '#ffd23f');
         game.addCash(30, member.x, member.y);
+        game.gangs.retaliate(member.crew.name, game);
         game.gangs.scatterNear(member.x, member.y, 200);
         landed = true;
       }
     }
+    if (landed && game.stats) game.stats.recordKnockdown();
     return landed;
   }
 
@@ -332,6 +357,7 @@ export class Player {
         game.addCrime(1, `You shot a ${hit.member.crew.name}! Their crew saw that.`);
         game.addParticles(hit.member.x, hit.member.y, 10, '#e33f2f');
         game.addCash(30, hit.member.x, hit.member.y);
+        game.gangs.retaliate(hit.member.crew.name, game);
         game.gangs.scatterNear(hit.member.x, hit.member.y, 200);
       } else {
         hit.car.damage(34, game);
@@ -339,6 +365,7 @@ export class Player {
         game.addParticles(hit.car.x, hit.car.y, 8, '#f2c230');
       }
     }
+    if (hit && hit.kind !== 'car' && game.stats) game.stats.recordKnockdown();
     game.addCrime(0.4, '', true); // gunfire alone draws a little heat
     return true;
   }
@@ -396,6 +423,9 @@ export class Crowd {
         const spots = Object.values(this.city.landmarks);
         const spot = spots[Math.floor(this.rng() * spots.length)];
         this.peds.push(new Ped(spot.x + between(this.rng, -90, 90), spot.y + between(this.rng, -90, 90), this.rng, 'loiterer'));
+      } else if (roll < 0.42) {
+        // Tourists with cameras, drifting between the sights.
+        this.peds.push(new Ped(between(this.rng, 200, 3400), between(this.rng, 200, 2200), this.rng, 'tourist'));
       } else {
         this.peds.push(new Ped(x, y, this.rng, 'walker'));
       }

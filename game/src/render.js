@@ -63,13 +63,18 @@ export class Renderer {
     this.drawBuildings(ctx, game);
     this.drawProps(ctx, game);
     this.drawStashes(ctx, game);
+    this.drawPickups(ctx, game);
     this.drawMarkers(ctx, game);
+    this.drawRacePad(ctx, game);
     this.drawPeople(ctx, game);
     this.drawCars(ctx, game);
     this.drawPlayer(ctx, game);
     this.drawEffects(ctx, game);
     this.drawHelicopter(ctx, game);
+    this.drawSpikes(ctx, game);
     this.drawSunset(ctx);
+    // Night falls over the world, then the rain over that.
+    game.daynight.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H }, game);
     // Rain falls over the whole viewport, above the world.
     game.weather.draw(ctx, { x: this.cam.x, y: this.cam.y, w: W, h: H });
     ctx.restore();
@@ -302,6 +307,81 @@ export class Renderer {
       ctx.fillRect(-9, -6, 18, 12);
       ctx.fillStyle = '#2c2c34';
       ctx.fillRect(-9, -1, 18, 2);
+      ctx.restore();
+    }
+  }
+
+  // Pickups on the ground: ammo crates, medkits, dropped wallets.
+  // Each one pulses so a Marco on foot can spot it from a distance.
+  drawPickups(ctx, game) {
+    for (const item of game.pickups.items) {
+      if (item.taken) continue;
+      const pulse = 1 + Math.sin(this.time * 4 + item.x) * 0.12;
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.scale(pulse, pulse);
+      if (item.kind === 'ammo') {
+        ctx.fillStyle = '#2c2c34';
+        ctx.fillRect(-10, -7, 20, 14);
+        ctx.fillStyle = '#f2c230';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AMMO', 0, 3);
+      } else if (item.kind === 'health') {
+        ctx.fillStyle = '#e8e4da';
+        ctx.fillRect(-9, -9, 18, 18);
+        ctx.fillStyle = '#58d068';
+        ctx.fillRect(-2, -7, 4, 14);
+        ctx.fillRect(-7, -2, 14, 4);
+      } else {
+        ctx.fillStyle = '#7dff8a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('$', 0, 3);
+      }
+      ctx.restore();
+    }
+  }
+
+  // The street-race start pad by the stadium, and the next
+  // checkpoint flag while a race is running.
+  drawRacePad(ctx, game) {
+    const race = game.races;
+    if (!race) return;
+    const pad = race.pad;
+    ctx.save();
+    ctx.strokeStyle = race.state === 'armed' ? '#ffd23f' : 'rgba(255,210,63,0.5)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.arc(pad.x, pad.y, 60, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd23f';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('RACE', pad.x, pad.y - 70);
+    ctx.restore();
+    const target = race.currentTarget();
+    if (target) {
+      const bob = Math.sin(this.time * 4) * 5;
+      ctx.save();
+      ctx.translate(target.x, target.y + bob);
+      ctx.fillStyle = '#ff5f6d';
+      ctx.beginPath();
+      ctx.moveTo(0, -40);
+      ctx.lineTo(14, -10);
+      ctx.lineTo(-14, -10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏁', 0, -22);
       ctx.restore();
     }
   }
@@ -622,6 +702,28 @@ export class Renderer {
     ctx.restore();
   }
 
+  // Spike strips at five stars: a dark band with steel teeth.
+  drawSpikes(ctx, game) {
+    const spikes = game.police ? game.police.spikes : [];
+    for (const strip of spikes) {
+      ctx.save();
+      ctx.translate(strip.x, strip.y);
+      ctx.rotate(strip.angle);
+      ctx.fillStyle = '#1a1a20';
+      ctx.fillRect(-40, -6, 80, 12);
+      ctx.fillStyle = '#c8ccd4';
+      for (let i = -3; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * 11, -6);
+        ctx.lineTo(i * 11 + 5, 0);
+        ctx.lineTo(i * 11, 6);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   // --- effects and light ---
 
   drawEffects(ctx, game) {
@@ -714,6 +816,15 @@ export class Renderer {
     // Food stalls in green.
     for (const ped of game.crowd.peds) {
       if (ped.kind === 'vendor') blip(ped.x, ped.y, 2.5, '#58d068');
+    }
+    // Pickups in yellow, the race pad in red, the race target in pink.
+    for (const item of game.pickups.items) {
+      if (!item.taken) blip(item.x, item.y, 2, '#ffd23f');
+    }
+    if (game.races) {
+      blip(game.races.pad.x, game.races.pad.y, 3, '#ff5f6d');
+      const raceTarget = game.races.currentTarget();
+      if (raceTarget) blip(raceTarget.x, raceTarget.y, 3.5, '#ff8fb0');
     }
     // The player, as a white arrow.
     const pl = game.player;

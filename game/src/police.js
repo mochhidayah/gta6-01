@@ -12,6 +12,9 @@ const HELI_ORBIT = 250; // how far out the helicopter circles
 const HELI_STARS = 4; // stars needed before the helicopter lifts off
 const BLOCK_STARS = 3; // stars needed before roadblocks go up
 const BLOCK_EVERY = 14; // seconds between roadblock attempts
+const SPIKE_STARS = 5; // stars needed before spike strips go down
+const SPIKE_EVERY = 20; // seconds between spike-strip attempts
+const SPIKE_DAMAGE = 45; // health a strip takes off the car
 const QUIET_SECONDS = WANTED_RULES.coolOffDelay;
 const SECONDS_PER_STAR = WANTED_RULES.coolOffStep;
 
@@ -47,13 +50,16 @@ export class PoliceDirector {
     this.game = game;
     this.heli = null; // {x, y, angle, orbit, watching} or null
     this.blocks = []; // roadblocks: {cars:[a,b], x, y, age}
+    this.spikes = []; // spike strips: {x, y, angle, age} — 5 stars only
     this.quietFor = 0; // seconds Marco has been unseen
     this.seen = false; // anyone watching this frame?
     this.watched = false; // the helicopter has eyes on him
     this.spawnTimer = 0;
     this.copTimer = 0;
     this.blockTimer = 0;
+    this.spikeTimer = 0;
     this.heliToasted = false;
+    this.peakWanted = 0; // the highest star count this chase reached
   }
 
   playerPos() {
@@ -79,6 +85,7 @@ export class PoliceDirector {
     const target = Math.min(5, Math.floor(g.crimeHeat));
     if (target > g.wanted) {
       g.wanted = target;
+      this.peakWanted = Math.max(this.peakWanted, target);
       g.sounds.setSiren(g.wanted > 0);
       if (g.wanted >= 3) {
         g.hud.toast('HEAT IS ON', `${g.wanted}-star wanted level — the precinct is coming.`, 4);
@@ -125,6 +132,7 @@ export class PoliceDirector {
     this.updateCops(dt);
     this.updateHeli(dt);
     this.updateBlocks(dt);
+    this.updateSpikes(dt);
   }
 
   updateSight() {
@@ -165,6 +173,9 @@ export class PoliceDirector {
       if (g.wanted === 0) {
         g.sounds.setSiren(false);
         this.heliToasted = false;
+        // Slipping a 4-star chase clean is the GHOST achievement.
+        if (this.peakWanted >= 4 && g.stats) g.stats.recordGhostEscape();
+        this.peakWanted = 0;
         g.hud.toast('CLEAN', 'You slipped away. The heat is off — for now.', 4);
         this.clearForces();
       }
@@ -320,10 +331,48 @@ export class PoliceDirector {
     this.blocks = [];
   }
 
+  // --- spike strips (5 stars) ---
+
+  // At five stars the precinct drops spike strips ahead of Marco:
+  // drive over one and the car takes damage and loses half its speed.
+  updateSpikes(dt) {
+    const g = this.game;
+    if (g.wanted < SPIKE_STARS) {
+      this.spikes = [];
+      return;
+    }
+    this.spikeTimer -= dt;
+    const car = g.playerCar;
+    for (const strip of this.spikes) {
+      strip.age += dt;
+      if (!car || !g.player.inCar) continue;
+      const along = (car.x - strip.x) * Math.cos(strip.angle) + (car.y - strip.y) * Math.sin(strip.angle);
+      const across = Math.abs(-(car.x - strip.x) * Math.sin(strip.angle) + (car.y - strip.y) * Math.cos(strip.angle));
+      if (Math.abs(along) < 24 && across < 40) {
+        car.damage(SPIKE_DAMAGE, g);
+        car.speed *= 0.5;
+        strip.age = 999; // spent — one strip, one car
+        g.hud.toast('SPIKE STRIP', 'Tires shredded on a police spike strip — get off the road!', 4);
+        g.sounds.crash();
+        g.addParticles(car.x, car.y, 10, '#888');
+      }
+    }
+    this.spikes = this.spikes.filter((s) => s.age < 25);
+    if (this.spikeTimer > 0 || this.spikes.length >= 1) return;
+    this.spikeTimer = SPIKE_EVERY;
+    const pos = this.playerPos();
+    const p = g.player;
+    const heading = p.inCar && car ? car.angle : p.angle;
+    const spot = g.roadPointNear(pos.x + Math.cos(heading) * 480, pos.y + Math.sin(heading) * 480);
+    this.spikes.push({ x: spot.x, y: spot.y, angle: heading + Math.PI / 2, age: 0 });
+    g.hud.toast('SPIKES AHEAD', 'The precinct laid spike strips down the road — steer around them.', 4);
+  }
+
   clearForces() {
     for (const c of this.game.traffic.cars) if (c.police) c.dead = true;
     this.game.cops = [];
     this.heli = null;
     this.clearBlocks();
+    this.spikes = [];
   }
 }

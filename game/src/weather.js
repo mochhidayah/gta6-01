@@ -11,13 +11,17 @@ const CLEAR_MAX = 150;
 const RAIN_MIN = 25; // seconds a downpour lasts
 const RAIN_MAX = 60;
 const RAIN_CHANCE = 0.35; // odds the sky breaks after a clear spell
+const FOG_CHANCE = 0.25; // odds the bay fog rolls in instead
+const FOG_MIN = 30; // seconds the fog hangs around
+const FOG_MAX = 75;
 const DROP_COUNT = 140;
 
 export class Weather {
   constructor() {
-    this.state = 'clear'; // clear | rain
+    this.state = 'clear'; // clear | rain | fog
     this.timer = CLEAR_MIN + Math.random() * (CLEAR_MAX - CLEAR_MIN);
     this.intensity = 0; // 0 = dry, 1 = full downpour; ramps smoothly
+    this.fog = 0; // 0 = clear air, 1 = thick bay fog; ramps smoothly
     this.flash = 0; // lightning flash, fading out (0..1)
     this.flashTimer = 0;
     this.drops = [];
@@ -35,6 +39,9 @@ export class Weather {
     const step = dt * 0.8;
     if (this.intensity < target) this.intensity = Math.min(target, this.intensity + step);
     else if (this.intensity > target) this.intensity = Math.max(target, this.intensity - step);
+    const fogTarget = this.state === 'fog' ? 1 : 0;
+    if (this.fog < fogTarget) this.fog = Math.min(fogTarget, this.fog + dt * 0.5);
+    else if (this.fog > fogTarget) this.fog = Math.max(fogTarget, this.fog - dt * 0.5);
     for (const drop of this.drops) {
       drop.y += (drop.speed * dt) / 800;
       if (drop.y > 1) {
@@ -57,10 +64,15 @@ export class Weather {
   // The current spell ended: pick the next one.
   rollWeather(game) {
     if (this.state === 'clear') {
-      if (Math.random() < RAIN_CHANCE) {
+      const roll = Math.random();
+      if (roll < RAIN_CHANCE) {
         this.state = 'rain';
         this.timer = RAIN_MIN + Math.random() * (RAIN_MAX - RAIN_MIN);
         game.toast('RAIN MOVING IN', 'A downpour rolls in off Coral Bay — drive careful.', 4);
+      } else if (roll < RAIN_CHANCE + FOG_CHANCE) {
+        this.state = 'fog';
+        this.timer = FOG_MIN + Math.random() * (FOG_MAX - FOG_MIN);
+        game.toast('BAY FOG', 'Thick fog rolls off the water — watch the road, not the sky.', 4);
       } else {
         this.state = 'clear';
         this.timer = CLEAR_MIN + Math.random() * (CLEAR_MAX - CLEAR_MIN);
@@ -68,7 +80,7 @@ export class Weather {
     } else {
       this.state = 'clear';
       this.timer = CLEAR_MIN + Math.random() * (CLEAR_MAX - CLEAR_MIN);
-      game.toast('RAIN CLEARING', 'The storm passes — Palmera Bay dries out.', 4);
+      game.toast('SKY CLEARING', 'The weather lifts — Palmera Bay dries out.', 4);
     }
   }
 
@@ -78,12 +90,28 @@ export class Weather {
 
   // Paint the rain over the viewport: diagonal streaks whose opacity
   // follows the intensity, plus a dark tint while it pours — and a
-  // lightning flash, fading fast, when the sky cracks.
+  // lightning flash, fading fast, when the sky cracks. Fog is a
+  // pale wash that drifts: slow blobs of grey over the streets.
   draw(ctx, view) {
     if (this.flash > 0) {
       ctx.save();
       ctx.fillStyle = `rgba(230, 240, 255, ${this.flash * 0.35})`;
       ctx.fillRect(view.x, view.y, view.w, view.h);
+      ctx.restore();
+    }
+    if (this.fog > 0.01) {
+      ctx.save();
+      ctx.fillStyle = `rgba(200, 210, 220, ${0.22 * this.fog})`;
+      ctx.fillRect(view.x, view.y, view.w, view.h);
+      ctx.fillStyle = `rgba(220, 228, 235, ${0.1 * this.fog})`;
+      const t = Date.now() / 1000;
+      for (let i = 0; i < 5; i++) {
+        const bx = view.x + ((i * 397 + t * 12) % (view.w + 300)) - 150;
+        const by = view.y + ((i * 211) % view.h);
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 260, 90, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
     if (this.intensity <= 0.01) return;

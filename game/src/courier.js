@@ -11,6 +11,8 @@ import { shuffle } from './rng.js';
 const MARKER_RADIUS = 80;
 const MIN_TIME = 45; // seconds, even for a trip across the street
 const MAX_TIME = 150; // seconds, even for a trip across the city
+const FRAGILE_CHANCE = 0.35; // odds a parcel is marked fragile
+const FRAGILE_BONUS = 1.5; // fragile jobs pay half again
 
 // Pick two different landmarks and price the job from the distance
 // between them. Returns {pickup, drop, pickupName, dropName, pay, timeLimit}.
@@ -25,9 +27,12 @@ export function makeCourierJob(rng, landmarks) {
   const pickup = landmarks[pickupName];
   const drop = landmarks[dropName];
   const distance = Math.hypot(drop.x - pickup.x, drop.y - pickup.y);
-  const pay = 80 + Math.round(distance / 12);
+  // About a third of the parcels are fragile: a hard crash smashes
+  // them, but the client pays half again for the careful drive.
+  const fragile = rng() < FRAGILE_CHANCE;
+  const pay = Math.round((80 + Math.round(distance / 12)) * (fragile ? FRAGILE_BONUS : 1));
   const timeLimit = Math.max(MIN_TIME, Math.min(MAX_TIME, Math.round(distance / 14)));
-  return { pickup, drop, pickupName, dropName, pay, timeLimit };
+  return { pickup, drop, pickupName, dropName, pay, timeLimit, fragile };
 }
 
 // Turn a landmark key like 'policeHQ' into 'Police HQ' for the HUD.
@@ -48,6 +53,7 @@ export class CourierRun {
     this.dropName = prettyName(job.dropName);
     this.pay = job.pay;
     this.timeLimit = job.timeLimit;
+    this.fragile = !!job.fragile; // fragile: a hard crash smashes the parcel
     this.elapsed = 0;
     this.stage = 'pickup'; // pickup | deliver | done | expired
   }
@@ -73,8 +79,9 @@ export class CourierRun {
   }
 
   get label() {
-    if (this.stage === 'pickup') return `COURIER: collect the parcel at ${this.pickupName}`;
-    if (this.stage === 'deliver') return `COURIER: deliver to ${this.dropName}`;
+    const fragile = this.fragile ? ' (FRAGILE — no crashes!)' : '';
+    if (this.stage === 'pickup') return `COURIER: collect the parcel at ${this.pickupName}${fragile}`;
+    if (this.stage === 'deliver') return `COURIER: deliver to ${this.dropName}${fragile}`;
     return 'COURIER';
   }
 

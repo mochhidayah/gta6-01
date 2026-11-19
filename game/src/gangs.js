@@ -30,17 +30,19 @@ export class GangMember extends Ped {
     this.speed = 95;
     this.attackTimer = 0;
     this.state = 'stroll';
+    this.retaliating = false; // sent by a retaliation squad — hunts the player
   }
 
   // Chases when close and provoked (heat, pistol, or a turf-war mission).
+  // A retaliating member hunts the player on sight, car or no car.
   update(dt, game, rng) {
     if (this.state === 'down') return;
     if (this.attackTimer > 0) this.attackTimer -= dt;
     const p = game.player;
     const near = distSq(this.x, this.y, p.x, p.y) < AGGRO_RANGE * AGGRO_RANGE;
     const warOn = game.missions.active && game.missions.active.def.id === 'm9';
-    const provoked = game.wanted > 0 || p.weapon === 'pistol' || warOn;
-    if (near && provoked && !p.inCar) {
+    const provoked = game.wanted > 0 || p.weapon === 'pistol' || warOn || this.retaliating;
+    if (near && provoked && (!p.inCar || this.retaliating)) {
       this.chasePlayer(dt, game);
       return;
     }
@@ -83,6 +85,7 @@ export class Gangs {
     this.city = city;
     this.members = [];
     this.rngState = 987654321;
+    this.retaliationTimer = 0; // cooldown between retaliation squads
   }
 
   roll() {
@@ -115,7 +118,37 @@ export class Gangs {
     return this.members.filter((m) => m.crew.name === crewName);
   }
 
+  // Drop a member of the named crew at the drop point and send them
+  // after the player: knocking a gang member down has consequences.
+  // On a cooldown so one fight does not summon the whole city.
+  retaliate(crewName, game) {
+    if (this.retaliationTimer > 0) return;
+    this.retaliationTimer = 45;
+    const crew = crewByName(crewName);
+    const p = game.player;
+    const spawned = [];
+    for (let i = 0; i < 3 && this.members.length < MAX_MEMBERS; i++) {
+      const member = new GangMember(
+        p.x + (this.roll() - 0.5) * 500,
+        p.y + (this.roll() - 0.5) * 500,
+        () => this.roll(),
+        crew,
+      );
+      member.retaliating = true;
+      this.members.push(member);
+      spawned.push(member);
+    }
+    if (spawned.length > 0) {
+      game.hud.toast(
+        `${crew.name.toUpperCase()} RETALIATION`,
+        `You dropped one of theirs — ${spawned.length} of them are coming for you.`,
+        4,
+      );
+    }
+  }
+
   update(dt, game, rng) {
+    if (this.retaliationTimer > 0) this.retaliationTimer -= dt;
     for (const member of this.members) member.update(dt, game, rng);
     const px = game.player.x;
     const py = game.player.y;

@@ -48,6 +48,31 @@ export const ECONOMY = { startCash: 250, taxiMin: 60, taxiMax: 120, stashCash: 1
 
 export const SNACK = { price: 15, heal: 25 };
 
+// --- v3 systems: night driving, races, pickups, photo mode ---
+
+// Night driving: the headlights reach this far down the road.
+export const NIGHT = { headlightReach: 190, lampGlow: 46, fullDarkAlpha: 0.42 };
+
+// Street racing: the stadium pad, the prize ladder, rival pace.
+export const RACE = {
+  padRadius: 150,
+  checkRadius: 95,
+  countdown: 3,
+  rivals: 3,
+  prizes: [800, 400, 150, 50],
+  rivalTop: [392, 408, 425],
+  heatOnFinish: 1,
+};
+
+// Pickups lying around the city: what they give, how fast they return.
+export const PICKUP_RULES = { ammoRounds: 24, healthAmount: 50, cashAmount: 100, respawnSeconds: 50 };
+
+// Photo mode: how fast the frozen camera pans across the city.
+export const PHOTO = { panSpeed: 420 };
+
+// Near misses: how close and how fast a pass has to be to pay.
+export const NEAR_MISS = { range: 34, minSpeed: 300, reward: 10, cooldown: 2 };
+
 export const SAVE_KEY = 'palmera-bay-save-v1';
 
 // The car catalogue — every model invented for this game. Top speed
@@ -64,6 +89,7 @@ export const CAR_CATALOG = [
   { name: 'Coral Coupe', color: '#ff7fbf', top: 500, accel: 460 },
   { name: 'Bay Runner', color: '#ff8c1a', top: 560, accel: 560, bike: true },
   { name: 'City Bus', color: '#2e9e6b', top: 320, accel: 240, bus: true },
+  { name: 'Sunset Pickup', color: '#d9a441', top: 460, accel: 430 },
 ];
 
 // The armored van for the final job — slow, heavy, worth a fortune.

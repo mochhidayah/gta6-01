@@ -11,6 +11,7 @@ export class Input {
     this.down = {}; // currently held keys, by code
     this.struck = {}; // keys pressed since the last frame
     this.mouse = { x: 0, y: 0, held: false, clicked: false };
+    this.wheelDelta = 0; // accumulated wheel scroll since the last frame
     this.canvas = canvas;
     this.attach(canvas);
   }
@@ -24,6 +25,8 @@ export class Input {
     });
     canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
     canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    // The wheel cycles weapons; the page must not scroll under the game.
+    canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
   }
 
   onKeyDown(event) {
@@ -51,6 +54,21 @@ export class Input {
     if (event.button !== 0) return;
     this.mouse.held = true;
     this.mouse.clicked = true;
+  }
+
+  // Wheel scroll: accumulate the delta so the frame loop can act on
+  // it once, and keep the page from scrolling under the game.
+  onWheel(event) {
+    event.preventDefault();
+    this.wheelDelta += event.deltaY;
+  }
+
+  // The wheel delta since the last frame (0 when untouched),
+  // consumed on read like a key press.
+  takeWheel() {
+    const delta = this.wheelDelta;
+    this.wheelDelta = 0;
+    return delta;
   }
 
   // True once per physical press of the key.

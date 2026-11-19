@@ -23,6 +23,8 @@ const RAMP_SPOTS = [
   { x: 2900, y: 800, angle: Math.PI }, // Uptown westbound
   { x: 1560, y: 2050, angle: -Math.PI / 2 }, // Marina northbound
   { x: 2560, y: 1700, angle: Math.PI / 2 }, // Stadium southbound
+  { x: 900, y: 1400, angle: Math.PI / 4 }, // Beach road diagonal
+  { x: 2200, y: 500, angle: Math.PI }, // Docks westbound
 ];
 
 export class StuntRamps {
@@ -51,6 +53,7 @@ export class StuntRamps {
       if (along < ALIGN_COS) continue;
       ramp.cooldown = 3;
       car.air = { t: 0, total: AIR_TIME };
+      car.airAngle = car.angle; // the takeoff line — land straight on it for PERFECT
       game.sounds.horn();
       game.toast('STUNT RAMP', 'Airtime! Stay smooth for the landing.', 2);
       return;
@@ -60,6 +63,8 @@ export class StuntRamps {
   // The car is in the air: count the flight, lift the body on a
   // parabola, and pay out when it comes back down. Jumps chained
   // within 6 seconds multiply the payout — a combo for show-offs.
+  // Land it straight (within 15 degrees of the takeoff line) and
+  // the landing is PERFECT: double the reward and a clean bonus.
   flyAirborne(dt, car, game) {
     car.air.t += dt;
     const done = car.air.t / car.air.total;
@@ -69,11 +74,22 @@ export class StuntRamps {
       car.airHeight = 0;
       this.combo = game.elapsed - this.lastJumpAt < 6 ? this.combo + 1 : 1;
       this.lastJumpAt = game.elapsed;
-      const reward = Math.round(airTime * CASH_PER_SECOND * (1 + 0.5 * (this.combo - 1)));
+      if (game.stats) game.stats.recordJump();
+      const straight = Math.abs(((car.angle - car.airAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.26;
+      const perfect = straight && Math.abs(car.speed) > MIN_LAUNCH_SPEED;
+      let reward = Math.round(airTime * CASH_PER_SECOND * (1 + 0.5 * (this.combo - 1)));
+      if (perfect) reward *= 2;
+      if (game.stats) game.stats.recordEarned(reward);
       game.player.money += reward;
       game.sounds.cash();
-      game.addParticles(car.x, car.y, 14, '#ffd23f');
-      game.toast('AIR TIME', this.combo > 1 ? `Clean landing — +$${reward} (combo x${this.combo})!` : `Clean landing — +$${reward}.`, 3);
+      game.addParticles(car.x, car.y, perfect ? 24 : 14, perfect ? '#7dff8a' : '#ffd23f');
+      game.toast(
+        perfect ? 'PERFECT LANDING' : 'AIR TIME',
+        perfect
+          ? `Dead straight — +$${reward} (perfect x2${this.combo > 1 ? `, combo x${this.combo}` : ''})!`
+          : this.combo > 1 ? `Clean landing — +$${reward} (combo x${this.combo})!` : `Clean landing — +$${reward}.`,
+        3,
+      );
       return;
     }
     // Parabola: 0 at take-off and landing, peak in the middle.

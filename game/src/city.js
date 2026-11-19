@@ -337,4 +337,36 @@ export class City {
   inAnyPark(x, y) {
     return this.parks.some((p) => x > p.x && x < p.x + p.w && y > p.y && y < p.y + p.h);
   }
+
+  // The nearest landmark to a point, with its key: the HUD and the
+  // photo mode caption both want to know where Marco is standing.
+  nearestLandmark(x, y) {
+    let best = null;
+    let bestD = Infinity;
+    for (const [key, spot] of Object.entries(this.landmarks)) {
+      const d = (spot.x - x) ** 2 + (spot.y - y) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = { key, ...spot };
+      }
+    }
+    return best;
+  }
+
+  // A landmark key as a readable name: 'policeHQ' -> 'Police HQ'.
+  landmarkLabel(key) {
+    const spaced = key.replace(/([A-Z])/g, ' $1');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
+  }
+
+  // A random point on a road, for spawns that must start drivable:
+  // pick a random avenue and street, then jitter along the road.
+  randomRoadPoint(rng) {
+    const avenue = AVENUES[Math.floor(rng() * AVENUES.length)];
+    const street = STREETS[Math.floor(rng() * STREETS.length)];
+    const along = rng() < 0.5;
+    return along
+      ? { x: avenue + between(rng, -180, 180), y: street }
+      : { x: avenue, y: street + between(rng, -180, 180) };
+  }
 }

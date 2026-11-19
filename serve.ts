@@ -2,11 +2,14 @@
 //
 // Play the entry locally without a build step:
 //
-//   node serve.ts [--port 8080] [--host 127.0.0.1]
+//   node serve.ts [--port 8080] [--host 127.0.0.1] [--log]
 //
 // It serves game/ on http://localhost:8080, sends the MIME types a
 // browser game needs, and refuses any path outside game/. This is a
 // development convenience, not a web server for the internet.
+// With --log it prints one line per request (method, path, status),
+// so a broken asset shows up in the terminal instead of silently
+// failing in the browser.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -57,6 +60,14 @@ function parseHost(argv) {
 
 const host = parseHost(process.argv.slice(2));
 
+// --log prints one line per request to stdout.
+const logging = process.argv.includes('--log');
+function logRequest(method, pathname, status) {
+  if (!logging) return;
+  const stamp = new Date().toISOString().slice(11, 19);
+  console.log(`${stamp} ${method} ${pathname} -> ${status}`);
+}
+
 // Resolve a request path to a file inside game/, or null if it escapes.
 function resolveInside(pathname) {
   const file = resolve(join(root, normalize(pathname)));
@@ -74,12 +85,14 @@ createServer((request, response) => {
   try {
     pathname = decodeURIComponent(url.pathname);
   } catch {
+    logRequest(request.method, url.pathname, 400);
     response.writeHead(400).end('bad request');
     return;
   }
   if (pathname.endsWith('/')) pathname += 'index.html';
   const file = resolveInside(pathname);
   if (file === null) {
+    logRequest(request.method, pathname, 403);
     response.writeHead(403).end('forbidden');
     return;
   }
@@ -89,9 +102,11 @@ createServer((request, response) => {
     if (!stats.isFile()) throw new Error('not a file');
     size = stats.size;
   } catch {
+    logRequest(request.method, pathname, 404);
     response.writeHead(404).end('not found');
     return;
   }
+  logRequest(request.method, pathname, 200);
   response.writeHead(200, {
     'content-type': mimeFor(file),
     'content-length': size,

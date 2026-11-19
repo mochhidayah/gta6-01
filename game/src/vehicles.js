@@ -51,7 +51,7 @@ export class Car {
     this.maxHealth = this.health;
     this.dead = false;
     this.smoke = 0;
-    this.driver = opts.driver ?? null; // 'traffic' | 'patrol' | 'police' | 'roadblock' | 'taxiWait' | 'parked' | null (player)
+    this.driver = opts.driver ?? null; // 'traffic' | 'patrol' | 'police' | 'roadblock' | 'taxiWait' | 'racer' | 'parked' | null (player)
     this.brain = null; // traffic AI state: {route, leg, cruise}
     this.siren = this.police;
     this.skid = 0;
@@ -184,6 +184,16 @@ export class Traffic {
     return car;
   }
 
+  // A street-race rival: a named model on the start pad, driven by
+  // the race itself (races.js steers it), not by the traffic AI.
+  spawnRacer(x, y, angle, modelName) {
+    const model = CAR_CATALOG.find((m) => m.name === modelName) || CAR_CATALOG[0];
+    const car = new Car(x, y, angle, 0, { driver: 'racer', model });
+    car.speed = 0;
+    this.cars.push(car);
+    return car;
+  }
+
   spawnPatrol(x, y) {
     const p = roadPointNear(x, y);
     const car = new Car(p.x, p.y, gridHeading(this.rng, true), 4, {
@@ -251,11 +261,11 @@ export class Traffic {
         if (impact > 60 && game) game.onCarCrash(a, b, impact);
       }
     }
-    // Cull far traffic; parked cars, police, roadblocks, waiting taxis stay.
+    // Cull far traffic; parked cars, police, roadblocks, waiting taxis and racers stay.
     this.cars = this.cars.filter((car) => {
       if (car.driver === 'police' || car.driver === 'roadblock') return !car.dead;
       if (car === game.playerCar) return true;
-      if (car.driver === 'parked' || car.driver === 'taxiWait') return true;
+      if (car.driver === 'parked' || car.driver === 'taxiWait' || car.driver === 'racer') return true;
       return distSq(car.x, car.y, player.x, player.y) < 1600 * 1600;
     });
   }

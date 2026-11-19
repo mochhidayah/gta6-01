@@ -94,6 +94,19 @@ const SCENES = {
     frameCamera(game, x, y);
     game.hud.toast('THE PICKUP', 'Drive Lucia to Club Flamingo.', 30);
   },
+
+  // The street race at the stadium pad: Marco lined up beside three
+  // rivals, the countdown about to run, the first checkpoint ahead.
+  race(game) {
+    const pad = game.races.pad;
+    giveCar(game, pad.x, pad.y + 130, Math.PI / 2, 0, 0);
+    game.races.state = 'armed';
+    game.races.startRace(game);
+    game.traffic.spawn(4, pad.x, pad.y);
+    game.crowd.spawn(10, pad.x, pad.y);
+    frameCamera(game, pad.x, pad.y + 60);
+    game.hud.toast('STREET RACE', 'Three rivals, four checkpoints — first across the line takes $800.', 30);
+  },
 };
 
 export function applyShot(game) {

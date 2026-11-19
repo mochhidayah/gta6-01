@@ -7,7 +7,7 @@ const ELEMENT_IDS = [
   'hud', 'health-fill', 'health-num', 'money', 'stars', 'heat-fill', 'heat-wrap',
   'heli-alert', 'objective', 'objective-title', 'objective-step', 'objective-timer',
   'speed', 'weapon', 'radio', 'clock', 'toast', 'toast-title', 'toast-body',
-  'menu', 'menu-title', 'menu-body', 'menu-hint', 'minimap', 'fps',
+  'menu', 'menu-title', 'menu-body', 'menu-hint', 'minimap', 'fps', 'race-status',
 ];
 
 function healthColor(hp) {
@@ -77,10 +77,39 @@ export class HUD {
       ? `♪ ${game.sounds.radioNames[game.sounds.station]}`
       : '♪ Radio off';
     this.el.clock.textContent = clockText(game.clock);
+    this.paintRaceStatus(game);
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('show');
     }
+  }
+
+  // Race status chip (top centre): countdown, checkpoint, or the
+  // armed prompt. Hidden when no race is anywhere near starting.
+  paintRaceStatus(game) {
+    const el = this.el['race-status'];
+    if (!el) return;
+    const race = game.races;
+    if (!race) {
+      el.style.display = 'none';
+      return;
+    }
+    if (race.state === 'countdown') {
+      el.style.display = 'block';
+      el.textContent = `🏁 ${Math.ceil(race.countdown)}...`;
+      return;
+    }
+    if (race.state === 'racing') {
+      el.style.display = 'block';
+      el.textContent = `🏁 CHECKPOINT ${Math.min(race.next + 1, race.route.length)} / ${race.route.length} — ${Math.floor(race.time)}s`;
+      return;
+    }
+    if (race.state === 'armed') {
+      el.style.display = 'block';
+      el.textContent = '🏁 STREET RACE — press T to line up';
+      return;
+    }
+    el.style.display = 'none';
   }
 
   // Tracker: mission title, step, timer; taxi / courier / free-roam when idle.
@@ -91,6 +120,21 @@ export class HUD {
       this.el['objective-title'].textContent = `◆ ${m.active.def.title}  ($${m.active.def.pay})`;
       this.el['objective-step'].textContent = step.text;
       this.el['objective-timer'].textContent = this.timerText(game, step);
+      return;
+    }
+    if (game.races && game.races.racing) {
+      const race = game.races;
+      const target = race.currentTarget();
+      this.el['objective-title'].textContent = '◆ STREET RACE';
+      if (race.state === 'countdown') {
+        this.el['objective-step'].textContent = 'Get ready — the countdown is running.';
+        this.el['objective-timer'].textContent = `${Math.ceil(race.countdown)}...`;
+      } else {
+        this.el['objective-step'].textContent = target
+          ? `Next checkpoint: ${target.label} — ${race.next + 1} of ${race.route.length}`
+          : 'Final stretch — bring it home.';
+        this.el['objective-timer'].textContent = `${Math.floor(race.time)}s`;
+      }
       return;
     }
     if (m.taxi) {
@@ -107,13 +151,16 @@ export class HUD {
       this.el['objective-timer'].textContent = `${Math.ceil(m.courier.timeLeft)}s left`;
       return;
     }
+    const challenge = game.challenges ? game.challenges.current : null;
     this.el['objective-title'].textContent = m.storyDone
       ? '◆ STORY COMPLETE'
-      : `◆ NEXT JOB: ${m.storyIndex + 1} of ${10}`;
+      : `◆ NEXT JOB: ${m.storyIndex + 1} of ${m.total}`;
     this.el['objective-step'].textContent = m.storyDone
-      ? 'Free roam: fares, runs, stashes, chaos.'
+      ? 'Free roam: fares, runs, races, stashes, chaos.'
       : 'Press M for the next job.';
-    this.el['objective-timer'].textContent = '';
+    this.el['objective-timer'].textContent = challenge
+      ? `Challenge: ${challenge.label} (+$${challenge.reward})`
+      : '';
   }
 
   timerText(game, step) {

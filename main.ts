@@ -18,7 +18,7 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -26,6 +26,24 @@ import { buildDossier } from './vendor/makefun-game.ts';
 // Where the entry lives, and where the grader wants the hand-in.
 const repoRoot = fileURLToPath(new URL('.', import.meta.url));
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
+// Count the files and bytes under a directory, for the build log.
+function countTree(dir) {
+  let files = 0;
+  let bytes = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = countTree(path);
+      files += sub.files;
+      bytes += sub.bytes;
+    } else {
+      files += 1;
+      bytes += statSync(path).size;
+    }
+  }
+  return { files, bytes };
+}
 
 // Copy a directory tree when it exists; the screenshots folder is
 // optional in a work-in-progress tree.
@@ -55,4 +73,6 @@ const dossier = buildDossier(outputDir, {
 writeFileSync(join(outputDir, 'dossier.json'), dossier);
 
 // One line on stdout so the build's result is visible in the log.
+const handedIn = countTree(outputDir);
 console.log(`Palmera Bay handed in: ${dossier.length} bytes of dossier in ${outputDir}`);
+console.log(`Hand-in contents: ${handedIn.files} files, ${handedIn.bytes} bytes under ${outputDir}`);
