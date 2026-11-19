@@ -4,54 +4,54 @@
 // at one, drop it at the other before the clock runs out. Pay scales
 // with the distance, and the deadline is generous enough to drive
 // there, but not to sightsee on the way. The run is a small state
-// machine: pickup, then deliver, then done or expired. v5 rewrote
+// machine: pickup, then deliver, then done or expired. v6 rewrote
 // this file wholesale — same jobs, same payouts, new internal names.
 import { distSq } from './config.js';
 import { shuffle } from './rng.js';
 
-const MARKER_RADIUS = 80;
-const MIN_TIME = 45; // seconds, even for a trip across the street
-const MAX_TIME = 150; // seconds, even for a trip across the city
-const FRAGILE_CHANCE = 0.35; // odds a parcel is marked fragile
-const FRAGILE_BONUS = 1.5; // fragile jobs pay half again
+const SPOT_R = 80;
+const MIN_SECS = 45; // seconds, even for a trip across the street
+const MAX_SECS = 150; // seconds, even for a trip across the city
+const FRAGILE_ODDS = 0.35; // odds a parcel is marked fragile
+const FRAGILE_PAY = 1.5; // fragile jobs pay half again
 
 // Turn a landmark key like 'policeHQ' into 'Police HQ' for the HUD.
-function displayName(key) {
-  const spaced = key.replace(/([A-Z])/g, ' $1');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
+function prettyName(key) {
+  const words = key.replace(/([A-Z])/g, ' $1');
+  return words.charAt(0).toUpperCase() + words.slice(1).trim();
 }
 
-function atSpot(px, py, mark) {
-  return distSq(px, py, mark.x, mark.y) < MARKER_RADIUS * MARKER_RADIUS;
+function onMark(px, py, mark) {
+  return distSq(px, py, mark.x, mark.y) < SPOT_R * SPOT_R;
 }
 
 // Pick two different landmarks and price the run from the distance
 // between them. Returns {pickup, drop, pickupName, dropName, pay, timeLimit}.
 export function makeCourierJob(dice, landmarks) {
-  const names = shuffle(dice, Object.keys(landmarks));
-  const pickupName = names[0];
-  let dropName = names[1];
-  if (dropName === pickupName) {
-    const next = (names.indexOf(pickupName) + 4) % names.length;
-    dropName = names[next];
+  const keys = shuffle(dice, Object.keys(landmarks));
+  const first = keys[0];
+  let second = keys[1];
+  if (second === first) {
+    const next = (keys.indexOf(first) + 4) % keys.length;
+    second = keys[next];
   }
-  const pickup = landmarks[pickupName];
-  const drop = landmarks[dropName];
-  const distance = Math.hypot(drop.x - pickup.x, drop.y - pickup.y);
+  const pickup = landmarks[first];
+  const drop = landmarks[second];
+  const span = Math.hypot(drop.x - pickup.x, drop.y - pickup.y);
   // About a third of the parcels are fragile: a hard crash smashes
   // them, but the client pays half again for the careful drive.
-  const fragile = dice() < FRAGILE_CHANCE;
-  const pay = Math.round((80 + Math.round(distance / 12)) * (fragile ? FRAGILE_BONUS : 1));
-  const timeLimit = Math.max(MIN_TIME, Math.min(MAX_TIME, Math.round(distance / 14)));
-  return { pickup, drop, pickupName, dropName, pay, timeLimit, fragile };
+  const breakable = dice() < FRAGILE_ODDS;
+  const pay = Math.round((80 + Math.round(span / 12)) * (breakable ? FRAGILE_PAY : 1));
+  const timeLimit = Math.max(MIN_SECS, Math.min(MAX_SECS, Math.round(span / 14)));
+  return { pickup, drop, pickupName: first, dropName: second, pay, timeLimit, fragile: breakable };
 }
 
 export class CourierRun {
   constructor(run) {
     this.pickup = run.pickup;
     this.drop = run.drop;
-    this.pickupName = displayName(run.pickupName);
-    this.dropName = displayName(run.dropName);
+    this.pickupName = prettyName(run.pickupName);
+    this.dropName = prettyName(run.dropName);
     this.pay = run.pay;
     this.timeLimit = run.timeLimit;
     this.fragile = !!run.fragile; // fragile: a hard crash smashes the parcel
@@ -80,9 +80,9 @@ export class CourierRun {
   }
 
   get label() {
-    const fragile = this.fragile ? ' (FRAGILE — no crashes!)' : '';
-    if (this.stage === 'pickup') return `COURIER: collect the parcel at ${this.pickupName}${fragile}`;
-    if (this.stage === 'deliver') return `COURIER: deliver to ${this.dropName}${fragile}`;
+    const mark = this.fragile ? ' (FRAGILE — no crashes!)' : '';
+    if (this.stage === 'pickup') return `COURIER: collect the parcel at ${this.pickupName}${mark}`;
+    if (this.stage === 'deliver') return `COURIER: deliver to ${this.dropName}${mark}`;
     return 'COURIER';
   }
 
@@ -96,13 +96,13 @@ export class CourierRun {
       return 'expired';
     }
     if (this.stage === 'pickup') {
-      if (atSpot(px, py, this.pickup)) {
+      if (onMark(px, py, this.pickup)) {
         this.stage = 'deliver';
         return 'picked';
       }
       return null;
     }
-    if (atSpot(px, py, this.drop)) {
+    if (onMark(px, py, this.drop)) {
       this.stage = 'done';
       return 'delivered';
     }
