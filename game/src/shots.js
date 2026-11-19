@@ -124,3 +124,5 @@ export function applyShot(game) {
   SCENES[shot](game);
   window.__shot = shot;
 }
+
+// v7: screenshots still capture the same four scenes; the city didn't move.

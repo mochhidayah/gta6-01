@@ -16,3 +16,5 @@ shots/
 tmp/
 
 # v6: the game still has no dependencies and no build output besides out/.
+
+# v7: keep the build's scratch files out of the repo — one witnessed line, 19 Nov 2026.

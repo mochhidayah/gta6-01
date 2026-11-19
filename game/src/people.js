@@ -495,3 +495,5 @@ export class Crowd {
     }
   }
 }
+
+// v7: the crowds on the sidewalk now have schedules to keep in the life system.

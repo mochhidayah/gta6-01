@@ -180,3 +180,5 @@ export const PED_NAMES = [
 // --- v4 systems: radio, side jobs, cutscenes ---
 // Their tuning lives in their own modules (radio.js, sidejobs.js,
 // cutscenes.js) — no shared numbers needed here.
+
+// v7: tuning knobs for the new systems live in their own files, not here.

@@ -435,3 +435,5 @@ export class Cutscenes {
     if (typeof done === 'function') done();
   }
 }
+
+// v7: the new story missions bring their own scenes; these old ones stay put.

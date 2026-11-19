@@ -231,3 +231,5 @@ export class StreetRace {
     return this.won;
   }
 }
+
+// v7: street races still pay — and the garage now sells the cars that win them.

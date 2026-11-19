@@ -170,3 +170,5 @@ export class Stats {
     return `${this.jobsDone} jobs · ${km} km driven · ${this.jumps} jumps · ${this.unlocked.length}/${MEDALS.length} achievements`;
   }
 }
+
+// v7: the new systems report their numbers here — money, heat, reputation.

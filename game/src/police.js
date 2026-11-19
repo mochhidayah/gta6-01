@@ -377,3 +377,5 @@ export class PoliceDirector {
     this.spikes = [];
   }
 }
+
+// v7: the heat system reads the same wanted level and answers with more pressure.

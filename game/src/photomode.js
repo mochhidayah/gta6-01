@@ -86,3 +86,5 @@ export class PhotoMode {
     ctx.restore();
   }
 }
+
+// v7: photo mode now has new storefronts and rides worth framing.

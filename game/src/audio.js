@@ -283,3 +283,5 @@ export class SoundBank {
     }, 240);
   }
 }
+
+// v7: radio and effects keep playing while the six new systems run alongside.

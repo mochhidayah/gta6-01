@@ -76,3 +76,5 @@ export class DailyChallenges {
     }
   }
 }
+
+// v7: challenges now sit beside empire payouts — two ways to earn, one city.

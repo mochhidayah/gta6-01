@@ -121,3 +121,5 @@ createServer((request, response) => {
 }).listen(port, host, () => {
   console.log(`game/ is on http://${host}:${port}`);
 });
+
+// v7: the dev server serves the same game, now with six more modules behind it.

@@ -102,3 +102,5 @@ export class Pickups {
     game.hud.toast('FOUND CASH', `+$${CASH} — someone's wallet, now yours.`, 3);
   }
 }
+
+// v7: pickups on the ground now feed the arsenal's ammo crafting.

@@ -475,3 +475,5 @@ export class Radio {
     }
   }
 }
+
+// v7: the stations keep spinning while empire money rolls in.

@@ -133,3 +133,5 @@ export class Weather {
     ctx.restore();
   }
 }
+
+// v7: rain and sun keep falling on the new businesses like everything else.

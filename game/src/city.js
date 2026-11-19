@@ -377,3 +377,5 @@ export class City {
       : { x: avenue, y: street + between(rng, -180, 180) };
   }
 }
+
+// v7: the map itself is untouched; the new systems play on the same streets.

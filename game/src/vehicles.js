@@ -370,3 +370,5 @@ export class Traffic {
     return best;
   }
 }
+
+// v7: the garage upgrades these same cars — paint, engine, armor, nitro.

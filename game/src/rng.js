@@ -77,3 +77,5 @@ export function pickWeighted(rng, entries) {
   }
   return entries[entries.length - 1].value;
 }
+
+// v7: one seed, one city — the new systems roll their dice from the same source.

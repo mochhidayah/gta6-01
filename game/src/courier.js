@@ -109,3 +109,5 @@ export class CourierRun {
     return null;
   }
 }
+
+// v7: courier runs now share the streets with empire delivery vans.

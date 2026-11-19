@@ -93,3 +93,5 @@ export class Input {
     this.mouse.clicked = false;
   }
 }
+
+// v7: no new keys needed — the new menus reuse the buttons players already know.

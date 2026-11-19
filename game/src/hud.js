@@ -198,3 +198,5 @@ export class HUD {
     return '';
   }
 }
+
+// v7: the HUD still shows the same bars; the new systems report through it.

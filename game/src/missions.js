@@ -516,3 +516,5 @@ export class MissionManager {
     }
   }
 }
+
+// v7: missions 1–13 stand as written; 14–18 continue the story in a new file.

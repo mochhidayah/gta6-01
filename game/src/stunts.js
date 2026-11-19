@@ -98,3 +98,5 @@ export class StuntRamps {
     car.airHeight = LIFT * 4 * part * (1 - part);
   }
 }
+
+// v7: stunts still pay for style; the garage sells the machines that make them.

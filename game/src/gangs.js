@@ -167,3 +167,5 @@ export class Gangs {
     }
   }
 }
+
+// v7: gangs watch the new empire turf — expansion has eyes on it.

@@ -858,3 +858,5 @@ export class Renderer {
     mm.strokeRect(this.cam.x * sx, this.cam.y * sy, this.canvas.width * sx, this.canvas.height * sy);
   }
 }
+
+// v7: the renderer draws the same city; the new systems only add sprites on top.
