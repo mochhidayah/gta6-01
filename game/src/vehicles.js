@@ -11,22 +11,22 @@ import { seeded, choose, between } from './rng.js';
 let nextCarId = 1;
 
 // A loop of waypoints on the grid: alternate avenues and streets.
-function planRoute(rng, startX, startY) {
-  const points = [{ x: startX, y: startY }];
+function plotRoute(rng, startX, startY) {
+  const stops = [{ x: startX, y: startY }];
   let x = startX;
   let y = startY;
-  const legs = 4 + Math.floor(rng() * 4);
-  for (let i = 0; i < legs; i++) {
+  const spans = 4 + Math.floor(rng() * 4);
+  for (let i = 0; i < spans; i++) {
     if (i % 2 === 0) x = choose(rng, AVENUES);
     else y = choose(rng, STREETS);
-    points.push({ x, y });
+    stops.push({ x, y });
   }
-  points.push({ x: startX, y: startY });
-  return points;
+  stops.push({ x: startX, y: startY });
+  return stops;
 }
 
-function gridHeading(rng, alongAvenue) {
-  if (alongAvenue) return rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+function gridAngle(rng, vertical) {
+  if (vertical) return rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
   return rng() < 0.5 ? 0 : Math.PI;
 }
 
@@ -145,18 +145,18 @@ export class Traffic {
     for (let i = 0; i < count; i++) {
       const x = nearX + (this.rng() - 0.5) * 1600;
       const y = nearY + (this.rng() - 0.5) * 1200;
-      const p = roadPointNear(x, y);
-      const alongAvenue = Math.abs(p.x - x) < Math.abs(p.y - y);
-      const angle = gridHeading(this.rng, alongAvenue);
+      const spot = roadPointNear(x, y);
+      const vertical = Math.abs(spot.x - x) < Math.abs(spot.y - y);
+      const angle = gridAngle(this.rng, vertical);
       const isPatrol = this.rng() < 0.2;
-      const car = new Car(p.x, p.y, angle, Math.floor(this.rng() * CAR_CATALOG.length), {
+      const car = new Car(spot.x, spot.y, angle, Math.floor(this.rng() * CAR_CATALOG.length), {
         driver: isPatrol ? 'patrol' : 'traffic',
         patrol: isPatrol,
         color: isPatrol ? '#2e4a6b' : undefined,
       });
       car.speed = between(this.rng, 90, 170);
       car.brain = {
-        route: planRoute(this.rng, p.x, p.y),
+        route: plotRoute(this.rng, spot.x, spot.y),
         leg: 1,
         cruise: between(this.rng, 120, 170),
       };
@@ -196,23 +196,23 @@ export class Traffic {
   }
 
   spawnPatrol(x, y) {
-    const p = roadPointNear(x, y);
-    const car = new Car(p.x, p.y, gridHeading(this.rng, true), 4, {
+    const spot = roadPointNear(x, y);
+    const car = new Car(spot.x, spot.y, gridAngle(this.rng, true), 4, {
       driver: 'patrol',
       patrol: true,
       color: '#2e4a6b',
     });
     car.speed = 150;
-    car.brain = { route: planRoute(this.rng, p.x, p.y), leg: 1, cruise: 190 };
+    car.brain = { route: plotRoute(this.rng, spot.x, spot.y), leg: 1, cruise: 190 };
     this.cars.push(car);
     return car;
   }
 
   // A taxi waiting for a fare: sits by the road until Marco walks up, then honks.
   spawnHailedTaxi(x, y) {
-    const p = roadPointNear(x, y);
+    const spot = roadPointNear(x, y);
     const taxiModel = CAR_CATALOG.find((m) => m.taxi) || CAR_CATALOG[2];
-    const car = new Car(p.x, p.y, gridHeading(this.rng, true), 0, {
+    const car = new Car(spot.x, spot.y, gridAngle(this.rng, true), 0, {
       driver: 'taxiWait',
       model: taxiModel,
     });
@@ -225,14 +225,14 @@ export class Traffic {
     for (let i = 0; i < count; i++) {
       const avenue = choose(this.rng, AVENUES);
       const street = choose(this.rng, STREETS);
-      const alongAvenue = this.rng() < 0.5;
-      const x = alongAvenue
+      const vertical = this.rng() < 0.5;
+      const x = vertical
         ? avenue + (this.rng() < 0.5 ? 1 : -1) * 52
         : avenue + between(this.rng, -200, 200);
-      const y = alongAvenue
+      const y = vertical
         ? street + between(this.rng, -200, 200)
         : street + (this.rng() < 0.5 ? 1 : -1) * 52;
-      const angle = gridHeading(this.rng, alongAvenue);
+      const angle = gridAngle(this.rng, vertical);
       this.cars.push(new Car(x, y, angle, Math.floor(this.rng() * CAR_CATALOG.length), { driver: 'parked' }));
     }
   }
@@ -255,11 +255,11 @@ export class Traffic {
     }
     for (let i = 0; i < this.cars.length; i++) {
       for (let j = i + 1; j < this.cars.length; j++) {
-        const a = this.cars[i];
-        const b = this.cars[j];
-        if (a.dead || b.dead) continue;
-        const impact = a.collideWith(b);
-        if (impact > 60 && game) game.onCarCrash(a, b, impact);
+        const first = this.cars[i];
+        const second = this.cars[j];
+        if (first.dead || second.dead) continue;
+        const impact = first.collideWith(second);
+        if (impact > 60 && game) game.onCarCrash(first, second, impact);
       }
     }
     // Cull far traffic; parked cars, police, roadblocks, waiting taxis and racers stay.
@@ -273,10 +273,10 @@ export class Traffic {
 
   // A waiting taxi watches for Marco on foot: honk, flag him in, fare starts on entry.
   waitForFare(car, dt, game) {
-    const p = game.player;
+    const hero = game.player;
     if (car.honkTimer > 0) car.honkTimer -= dt;
-    if (p.inCar) return;
-    const d = Math.hypot(p.x - car.x, p.y - car.y);
+    if (hero.inCar) return;
+    const d = Math.hypot(hero.x - car.x, hero.y - car.y);
     if (d > 170) {
       car.hailed = false;
       return;
@@ -308,29 +308,29 @@ export class Traffic {
   // re-plan if the car ever ends up off the road.
   followRoute(car, dt, game) {
     if (!car.brain) {
-      car.brain = { route: planRoute(this.rng, car.x, car.y), leg: 1, cruise: 150 };
+      car.brain = { route: plotRoute(this.rng, car.x, car.y), leg: 1, cruise: 150 };
     }
-    const brain = car.brain;
-    if (!brain.route || brain.route.length === 0) {
-      brain.route = planRoute(this.rng, car.x, car.y);
-      brain.leg = 1;
+    const mind = car.brain;
+    if (!mind.route || mind.route.length === 0) {
+      mind.route = plotRoute(this.rng, car.x, car.y);
+      mind.leg = 1;
     }
-    const waypoint = brain.route[brain.leg % brain.route.length];
+    const waypoint = mind.route[mind.leg % mind.route.length];
     const dx = waypoint.x - car.x;
     const dy = waypoint.y - car.y;
     if (Math.hypot(dx, dy) < 40) {
-      brain.leg += 1;
+      mind.leg += 1;
     }
     const wantAngle = Math.atan2(dy, dx);
     const steer = clamp(wrapAngle(wantAngle - car.angle) * 1.8, -1, 1);
     const blocked = this.carAhead(car);
-    const cruise = blocked ? 0 : brain.cruise;
+    const cruise = blocked ? 0 : mind.cruise;
     car.drive(car.speed < cruise ? 0.7 : 0, steer, false, dt);
     const aheadX = car.x + Math.cos(car.angle) * 60;
     const aheadY = car.y + Math.sin(car.angle) * 60;
     if (!onRoad(aheadX, aheadY) && !onRoad(car.x, car.y)) {
-      brain.route = planRoute(this.rng, car.x, car.y);
-      brain.leg = 1;
+      mind.route = plotRoute(this.rng, car.x, car.y);
+      mind.leg = 1;
     }
     if (game.wanted > 0 && distSq(car.x, car.y, game.player.x, game.player.y) < 220 * 220) {
       car.drive(1, 0, false, dt);
@@ -338,9 +338,9 @@ export class Traffic {
   }
 
   chasePlayer(car, dt, game) {
-    const p = game.player;
-    const tx = p.inCar ? game.playerCar.x : p.x;
-    const ty = p.inCar ? game.playerCar.y : p.y;
+    const hero = game.player;
+    const tx = hero.inCar ? game.playerCar.x : hero.x;
+    const ty = hero.inCar ? game.playerCar.y : hero.y;
     const dx = tx - car.x;
     const dy = ty - car.y;
     const d = Math.hypot(dx, dy);
@@ -349,7 +349,7 @@ export class Traffic {
     const topSpeed = game.wanted >= 4 ? 520 : game.wanted >= 2 ? 470 : 420;
     car.drive(car.speed < topSpeed ? 1 : 0, steer, false, dt);
     if (d < 46) {
-      if (p.inCar) game.playerCar.damage(180 * dt, game);
+      if (hero.inCar) game.playerCar.damage(180 * dt, game);
       else game.bustPlayer();
     }
     if (d > 1400) car.dead = true;

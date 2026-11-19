@@ -11,23 +11,23 @@
 // toast spam stays down and a single stunt cannot unlock two at
 // once. v4 rewrote this file wholesale — same counters, same
 // achievements, new structure.
-const CHECK_EVERY = 1; // seconds between achievement checks
+const CHECK_GAP = 1; // seconds between achievement checks
 
 // id, name, what it takes, reward. The `check` reads the counters.
 const ACHIEVEMENTS = [
-  { id: 'first-job', name: 'FIRST JOB', desc: 'Finish your first story mission.', reward: 100, check: (s) => s.jobsDone >= 1 },
-  { id: 'wheelman', name: 'WHEELMAN', desc: 'Drive 20 km of Palmera Bay streets.', reward: 200, check: (s) => s.distanceDriven >= 20000 },
-  { id: 'marathon', name: 'MARATHON', desc: 'Walk 5 km on foot.', reward: 150, check: (s) => s.distanceWalked >= 5000 },
-  { id: 'airborne', name: 'AIRBORNE', desc: 'Land 5 stunt jumps.', reward: 200, check: (s) => s.jumps >= 5 },
-  { id: 'ghost', name: 'GHOST', desc: 'Slip a 4-star wanted level with no one watching.', reward: 300, check: (s) => s.ghostEscapes >= 1 },
-  { id: 'high-roller', name: 'HIGH ROLLER', desc: 'Earn $5,000 across all work.', reward: 400, check: (s) => s.moneyEarned >= 5000 },
-  { id: 'brawler', name: 'BRAWLER', desc: 'Knock down 10 people, one way or another.', reward: 200, check: (s) => s.knockdowns >= 10 },
-  { id: 'sharpshooter', name: 'SHARPSHOOTER', desc: 'Fire 50 pistol rounds.', reward: 200, check: (s) => s.shotsFired >= 50 },
-  { id: 'close-call', name: 'CLOSE CALL', desc: 'Thread 5 near misses at speed.', reward: 250, check: (s) => s.nearMisses >= 5 },
-  { id: 'treasure', name: 'TREASURE HUNTER', desc: 'Dig up 5 hidden cash stashes.', reward: 250, check: (s) => s.stashesFound >= 5 },
-  { id: 'cab-king', name: 'CAB KING', desc: 'Complete 5 taxi fares.', reward: 200, check: (s) => s.fares >= 5 },
-  { id: 'street-king', name: 'STREET KING', desc: 'Win a street race.', reward: 300, check: (s) => s.racesWon >= 1 },
-  { id: 'night-owl', name: 'NIGHT OWL', desc: 'Spend a full minute driving after dark.', reward: 200, check: (s) => s.nightSeconds >= 60 },
+  { id: 'first-job', name: 'FIRST JOB', desc: 'Finish your first story mission.', reward: 100, check: (st) => st.jobsDone >= 1 },
+  { id: 'wheelman', name: 'WHEELMAN', desc: 'Drive 20 km of Palmera Bay streets.', reward: 200, check: (st) => st.distanceDriven >= 20000 },
+  { id: 'marathon', name: 'MARATHON', desc: 'Walk 5 km on foot.', reward: 150, check: (st) => st.distanceWalked >= 5000 },
+  { id: 'airborne', name: 'AIRBORNE', desc: 'Land 5 stunt jumps.', reward: 200, check: (st) => st.jumps >= 5 },
+  { id: 'ghost', name: 'GHOST', desc: 'Slip a 4-star wanted level with no one watching.', reward: 300, check: (st) => st.ghostEscapes >= 1 },
+  { id: 'high-roller', name: 'HIGH ROLLER', desc: 'Earn $5,000 across all work.', reward: 400, check: (st) => st.moneyEarned >= 5000 },
+  { id: 'brawler', name: 'BRAWLER', desc: 'Knock down 10 people, one way or another.', reward: 200, check: (st) => st.knockdowns >= 10 },
+  { id: 'sharpshooter', name: 'SHARPSHOOTER', desc: 'Fire 50 pistol rounds.', reward: 200, check: (st) => st.shotsFired >= 50 },
+  { id: 'close-call', name: 'CLOSE CALL', desc: 'Thread 5 near misses at speed.', reward: 250, check: (st) => st.nearMisses >= 5 },
+  { id: 'treasure', name: 'TREASURE HUNTER', desc: 'Dig up 5 hidden cash stashes.', reward: 250, check: (st) => st.stashesFound >= 5 },
+  { id: 'cab-king', name: 'CAB KING', desc: 'Complete 5 taxi fares.', reward: 200, check: (st) => st.fares >= 5 },
+  { id: 'street-king', name: 'STREET KING', desc: 'Win a street race.', reward: 300, check: (st) => st.racesWon >= 1 },
+  { id: 'night-owl', name: 'NIGHT OWL', desc: 'Spend a full minute driving after dark.', reward: 200, check: (st) => st.nightSeconds >= 60 },
 ];
 
 export class Stats {
@@ -99,37 +99,37 @@ export class Stats {
   // --- the frame tick ---
 
   update(dt, game) {
-    const p = game.player;
+    const hero = game.player;
     if (!this.tracking) {
-      this.lastX = p.x;
-      this.lastY = p.y;
+      this.lastX = hero.x;
+      this.lastY = hero.y;
       this.tracking = true;
       return;
     }
-    const moved = Math.hypot(p.x - this.lastX, p.y - this.lastY);
-    if (p.inCar) this.distanceDriven += moved;
-    else this.distanceWalked += moved;
-    this.lastX = p.x;
-    this.lastY = p.y;
-    if (game.daynight && game.daynight.isNight(game) && p.inCar) {
+    const step = Math.hypot(hero.x - this.lastX, hero.y - this.lastY);
+    if (hero.inCar) this.distanceDriven += step;
+    else this.distanceWalked += step;
+    this.lastX = hero.x;
+    this.lastY = hero.y;
+    if (game.daynight && game.daynight.isNight(game) && hero.inCar) {
       this.nightSeconds += dt;
     }
     this.checkTimer -= dt;
     if (this.checkTimer <= 0) {
-      this.checkTimer = CHECK_EVERY;
-      this.checkUnlocks(game);
+      this.checkTimer = CHECK_GAP;
+      this.unlockCheck(game);
     }
   }
 
-  checkUnlocks(game) {
-    for (const def of ACHIEVEMENTS) {
-      if (this.unlocked.includes(def.id)) continue;
-      if (!def.check(this)) continue;
-      this.unlocked.push(def.id);
-      game.player.money += def.reward;
+  unlockCheck(game) {
+    for (const ach of ACHIEVEMENTS) {
+      if (this.unlocked.includes(ach.id)) continue;
+      if (!ach.check(this)) continue;
+      this.unlocked.push(ach.id);
+      game.player.money += ach.reward;
       game.sounds.achievement();
       game.addParticles(game.player.x, game.player.y, 16, '#ffd23f');
-      game.toast('ACHIEVEMENT', `${def.name} — ${def.desc} +$${def.reward}.`, 5);
+      game.toast('ACHIEVEMENT', `${ach.name} — ${ach.desc} +$${ach.reward}.`, 5);
     }
   }
 
@@ -165,7 +165,7 @@ export class Stats {
 
   // One line for the pause screen: the record so far.
   summaryLine() {
-    const km = (this.distanceDriven / 1000).toFixed(1);
-    return `${this.jobsDone} jobs · ${km} km driven · ${this.jumps} jumps · ${this.unlocked.length}/${ACHIEVEMENTS.length} achievements`;
+    const kms = (this.distanceDriven / 1000).toFixed(1);
+    return `${this.jobsDone} jobs · ${kms} km driven · ${this.jumps} jumps · ${this.unlocked.length}/${ACHIEVEMENTS.length} achievements`;
   }
 }

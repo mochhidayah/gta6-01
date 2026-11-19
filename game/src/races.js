@@ -19,11 +19,11 @@ import { pickWeighted } from './rng.js';
 
 // Tuning lives in config.js (RACE): pad radius, checkpoint radius,
 // countdown, rival count, prizes, rival pace, heat on finish.
-const PAD_RADIUS = RACE.padRadius; // how close the pad has to be to arm the race
-const CHECK_RADIUS = RACE.checkRadius; // how close a checkpoint has to be to count
-const COUNTDOWN_SECONDS = RACE.countdown;
-const RIVAL_COUNT = RACE.rivals;
-const RIVAL_TOP = RACE.rivalTop; // rivals are quick, not unbeatable
+const PAD_R = RACE.padRadius; // how close the pad has to be to arm the race
+const CHECK_R = RACE.checkRadius; // how close a checkpoint has to be to count
+const COUNTDOWN = RACE.countdown;
+const RIVALS = RACE.rivals;
+const RIVAL_PACE = RACE.rivalTop; // rivals are quick, not unbeatable
 const PRIZES = RACE.prizes; // 1st, 2nd, 3rd, 4th
 // Rival cars, weighted: the fast Falcon shows up most, the Marina
 // Sedan only when the field is feeling generous.
@@ -34,7 +34,7 @@ const RIVAL_MODELS = [
 ];
 
 // The route: start at the stadium, then four checkpoints across town.
-function routeFor(landmarks) {
+function buildRoute(landmarks) {
   return [
     { x: landmarks.airport.x, y: landmarks.airport.y, label: 'AIRFIELD' },
     { x: landmarks.marina.x, y: landmarks.marina.y, label: 'MARINA' },
@@ -48,7 +48,7 @@ export class StreetRace {
     this.game = game;
     const stadium = game.city.landmarks.stadium;
     this.pad = { x: stadium.x + 150, y: stadium.y - 40 };
-    this.route = routeFor(game.city.landmarks);
+    this.route = buildRoute(game.city.landmarks);
     this.state = 'idle'; // idle | armed | countdown | racing | done
     this.armedToasted = false;
     this.countdown = 0;
@@ -79,15 +79,15 @@ export class StreetRace {
   // The pad arms when the player rolls onto it in a car, job-free.
   update(dt, game) {
     if (this.state === 'idle') {
-      const p = game.player;
-      const ok = p.inCar && game.playerCar && !game.missions.active
+      const hero = game.player;
+      const ready = hero.inCar && game.playerCar && !game.missions.active
         && !game.missions.taxi && !game.missions.courier && game.wanted === 0;
-      if (!ok) {
+      if (!ready) {
         this.armedToasted = false;
         return;
       }
       const car = game.playerCar;
-      if (distSq(car.x, car.y, this.pad.x, this.pad.y) < PAD_RADIUS * PAD_RADIUS) {
+      if (distSq(car.x, car.y, this.pad.x, this.pad.y) < PAD_R * PAD_R) {
         this.state = 'armed';
         this.armedToasted = true;
         game.toast('STREET RACE', 'Illegal racing at the stadium — press T to line up, $800 to the winner.', 5);
@@ -96,9 +96,9 @@ export class StreetRace {
       return;
     }
     if (this.state === 'armed') {
-      const p = game.player;
+      const hero = game.player;
       const car = game.playerCar;
-      if (!p.inCar || !car || distSq(car.x, car.y, this.pad.x, this.pad.y) > (PAD_RADIUS + 120) * (PAD_RADIUS + 120)) {
+      if (!hero.inCar || !car || distSq(car.x, car.y, this.pad.x, this.pad.y) > (PAD_R + 120) * (PAD_R + 120)) {
         this.state = 'idle';
         this.armedToasted = false;
       }
@@ -106,11 +106,11 @@ export class StreetRace {
     }
     if (this.state === 'countdown') {
       this.countdown -= dt;
-      const whole = Math.ceil(this.countdown);
-      if (whole !== this.lastBeep && whole > 0) {
-        this.lastBeep = whole;
+      const sec = Math.ceil(this.countdown);
+      if (sec !== this.lastBeep && sec > 0) {
+        this.lastBeep = sec;
         game.sounds.countBeep();
-        game.toast('RACE', `${whole}...`, 0.8);
+        game.toast('RACE', `${sec}...`, 0.8);
       }
       if (this.countdown <= 0) {
         this.state = 'racing';
@@ -119,7 +119,7 @@ export class StreetRace {
       }
       return;
     }
-    if (this.state === 'racing') this.updateRacing(dt, game);
+    if (this.state === 'racing') this.raceTick(dt, game);
   }
 
   // T at the pad: line the field up and run the countdown.
@@ -127,13 +127,13 @@ export class StreetRace {
     if (this.state !== 'armed') return false;
     const car = game.playerCar;
     this.rivals = [];
-    for (let i = 0; i < RIVAL_COUNT; i++) {
+    for (let i = 0; i < RIVALS; i++) {
       const angle = Math.PI / 2;
-      const rx = this.pad.x - 60 + i * 46;
-      const ry = this.pad.y + 60;
-      const rival = game.traffic.spawnRacer(rx, ry, angle, pickWeighted(game.rng, RIVAL_MODELS));
+      const sx = this.pad.x - 60 + i * 46;
+      const sy = this.pad.y + 60;
+      const rival = game.traffic.spawnRacer(sx, sy, angle, pickWeighted(game.rng, RIVAL_MODELS));
       rival.speed = 0;
-      this.rivals.push({ car: rival, next: 0, cruise: RIVAL_TOP[i], finished: false, place: 0 });
+      this.rivals.push({ car: rival, next: 0, cruise: RIVAL_PACE[i], finished: false, place: 0 });
     }
     // The player lines up on the pad, nose to the first checkpoint.
     car.x = this.pad.x;
@@ -145,31 +145,31 @@ export class StreetRace {
     this.finished = 0;
     this.won = false;
     this.state = 'countdown';
-    this.countdown = COUNTDOWN_SECONDS;
-    this.lastBeep = COUNTDOWN_SECONDS + 1;
+    this.countdown = COUNTDOWN;
+    this.lastBeep = COUNTDOWN + 1;
     game.toast('LINE UP', 'Three rivals beside you. 3... 2... 1...', 3);
     return true;
   }
 
-  updateRacing(dt, game) {
+  raceTick(dt, game) {
     this.time += dt;
     const car = game.playerCar;
     if (car && this.next < this.route.length) {
-      const cp = this.route[this.next];
-      if (distSq(car.x, car.y, cp.x, cp.y) < CHECK_RADIUS * CHECK_RADIUS) {
+      const mark = this.route[this.next];
+      if (distSq(car.x, car.y, mark.x, mark.y) < CHECK_R * CHECK_R) {
         this.next += 1;
         game.sounds.pickup();
-        game.addParticles(cp.x, cp.y, 12, '#ffd23f');
+        game.addParticles(mark.x, mark.y, 12, '#ffd23f');
         if (this.next >= this.route.length) this.finishRace(game, false);
         else game.toast('CHECKPOINT', `${this.next} of ${this.route.length} — next: ${this.route[this.next].label}.`, 2);
       }
     }
-    for (const rival of this.rivals) this.driveRival(dt, rival, game);
+    for (const rival of this.rivals) this.steerRival(dt, rival, game);
     // A rival that finishes takes a place before the player can.
     for (const rival of this.rivals) {
       if (rival.finished || rival.next >= this.route.length) continue;
-      const cp = this.route[rival.next];
-      if (distSq(rival.car.x, rival.car.y, cp.x, cp.y) < CHECK_RADIUS * CHECK_RADIUS) {
+      const mark = this.route[rival.next];
+      if (distSq(rival.car.x, rival.car.y, mark.x, mark.y) < CHECK_R * CHECK_R) {
         rival.next += 1;
         if (rival.next >= this.route.length) {
           rival.finished = true;
@@ -182,15 +182,15 @@ export class StreetRace {
 
   // A rival steers at its next checkpoint and lifts when a car is
   // directly ahead, so the pack bunches and overtakes.
-  driveRival(dt, rival, game) {
+  steerRival(dt, rival, game) {
     const car = rival.car;
     if (car.dead || rival.finished) return;
     if (rival.next >= this.route.length) return;
-    const cp = this.route[rival.next];
-    const dx = cp.x - car.x;
-    const dy = cp.y - car.y;
-    const want = Math.atan2(dy, dx);
-    const steer = clamp(wrapAngle(want - car.angle) * 1.8, -1, 1);
+    const mark = this.route[rival.next];
+    const dx = mark.x - car.x;
+    const dy = mark.y - car.y;
+    const aim = Math.atan2(dy, dx);
+    const steer = clamp(wrapAngle(aim - car.angle) * 1.8, -1, 1);
     let throttle = car.speed < rival.cruise ? 0.85 : 0;
     if (game.traffic.carAhead(car)) throttle = 0;
     car.drive(throttle, steer, false, dt);

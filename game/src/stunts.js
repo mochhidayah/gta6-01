@@ -11,15 +11,15 @@
 // new internal names.
 import { distSq } from './config.js';
 
-const LAUNCH_MIN_SPEED = 250;
-const ALIGN_COS = 0.7; // within ~45 degrees of the ramp's direction
-const TRIGGER_RADIUS = 34;
-const FLIGHT_SECONDS = 0.9; // seconds in the air
-const PEAK_LIFT = 34; // pixels the body lifts at the top of the arc
-const CASH_PER_AIR_SECOND = 120;
+const MIN_SPEED = 250;
+const ALIGN = 0.7; // within ~45 degrees of the ramp's direction
+const TRIGGER = 34;
+const FLIGHT = 0.9; // seconds in the air
+const PEAK = 34; // pixels the body lifts at the top of the arc
+const CASH_PER_SEC = 120;
 
 // Fixed ramps, one per corner of the map, each facing down a road.
-const RAMP_SPOTS = [
+const RAMPS = [
   { x: 560, y: 500, angle: 0 }, // Old Town eastbound
   { x: 2900, y: 800, angle: Math.PI }, // Uptown westbound
   { x: 1560, y: 2050, angle: -Math.PI / 2 }, // Marina northbound
@@ -30,7 +30,7 @@ const RAMP_SPOTS = [
 
 export class StuntRamps {
   constructor() {
-    this.ramps = RAMP_SPOTS.map((s) => ({ ...s, cooldown: 0 }));
+    this.ramps = RAMPS.map((r) => ({ ...r, cooldown: 0 }));
     this.combo = 0; // jumps chained within a few seconds of each other
     this.lastJumpAt = -99;
   }
@@ -43,17 +43,17 @@ export class StuntRamps {
     }
     if (!car || car.dead) return;
     if (car.air) {
-      this.flyAirborne(dt, car, game);
+      this.flyAir(dt, car, game);
       return;
     }
     for (const ramp of this.ramps) {
       if (ramp.cooldown > 0) continue;
-      if (distSq(car.x, car.y, ramp.x, ramp.y) > TRIGGER_RADIUS * TRIGGER_RADIUS) continue;
-      if (Math.abs(car.speed) < LAUNCH_MIN_SPEED) continue;
-      const along = Math.cos(car.angle) * Math.cos(ramp.angle) + Math.sin(car.angle) * Math.sin(ramp.angle);
-      if (along < ALIGN_COS) continue;
+      if (distSq(car.x, car.y, ramp.x, ramp.y) > TRIGGER * TRIGGER) continue;
+      if (Math.abs(car.speed) < MIN_SPEED) continue;
+      const align = Math.cos(car.angle) * Math.cos(ramp.angle) + Math.sin(car.angle) * Math.sin(ramp.angle);
+      if (align < ALIGN) continue;
       ramp.cooldown = 3;
-      car.air = { t: 0, total: FLIGHT_SECONDS };
+      car.air = { t: 0, total: FLIGHT };
       car.airAngle = car.angle; // the takeoff line — land straight on it for PERFECT
       game.sounds.horn();
       game.toast('STUNT RAMP', 'Airtime! Stay smooth for the landing.', 2);
@@ -66,19 +66,19 @@ export class StuntRamps {
   // within 6 seconds multiply the payout — a combo for show-offs.
   // Land it straight (within 15 degrees of the takeoff line) and
   // the landing is PERFECT: double the reward and a clean bonus.
-  flyAirborne(dt, car, game) {
+  flyAir(dt, car, game) {
     car.air.t += dt;
-    const done = car.air.t / car.air.total;
-    if (done >= 1) {
-      const airTime = car.air.total;
+    const frac = car.air.t / car.air.total;
+    if (frac >= 1) {
+      const airSecs = car.air.total;
       car.air = null;
       car.airHeight = 0;
       this.combo = game.elapsed - this.lastJumpAt < 6 ? this.combo + 1 : 1;
       this.lastJumpAt = game.elapsed;
       if (game.stats) game.stats.recordJump();
-      const straight = Math.abs(((car.angle - car.airAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.26;
-      const perfect = straight && Math.abs(car.speed) > LAUNCH_MIN_SPEED;
-      let reward = Math.round(airTime * CASH_PER_AIR_SECOND * (1 + 0.5 * (this.combo - 1)));
+      const clean = Math.abs(((car.angle - car.airAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.26;
+      const perfect = clean && Math.abs(car.speed) > MIN_SPEED;
+      let reward = Math.round(airSecs * CASH_PER_SEC * (1 + 0.5 * (this.combo - 1)));
       if (perfect) reward *= 2;
       if (game.stats) game.stats.recordEarned(reward);
       game.player.money += reward;
@@ -94,6 +94,6 @@ export class StuntRamps {
       return;
     }
     // Parabola: 0 at take-off and landing, peak in the middle.
-    car.airHeight = PEAK_LIFT * 4 * done * (1 - done);
+    car.airHeight = PEAK * 4 * frac * (1 - frac);
   }
 }

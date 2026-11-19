@@ -11,6 +11,7 @@
 // frames a chase at dusk gets the same tools the entry used.
 // Pan speed lives in config.js (PHOTO). v4 rewrote this file
 // wholesale — same behaviour, new structure.
+// v5: a few internal names refreshed, behaviour identical.
 import { PHOTO } from './config.js';
 
 const CAPTION = 'PALMERA BAY — PHOTO MODE';
@@ -18,14 +19,14 @@ const CAPTION = 'PALMERA BAY — PHOTO MODE';
 export class PhotoMode {
   constructor() {
     this.active = false;
-    this.savedCam = null;
+    this.savedView = null;
   }
 
   // Enter: remember the camera, hide the HUD, freeze the world.
   enter(game) {
     if (this.active) return;
     this.active = true;
-    this.savedCam = { x: game.renderer.cam.x, y: game.renderer.cam.y };
+    this.savedView = { x: game.renderer.cam.x, y: game.renderer.cam.y };
     game.hud.showHud(false);
     game.sounds.shutter();
     game.hud.toast('PHOTO MODE', 'WASD pans the camera — C or Esc to resume the game.', 4);
@@ -35,9 +36,9 @@ export class PhotoMode {
   exit(game) {
     if (!this.active) return;
     this.active = false;
-    if (this.savedCam) {
-      game.renderer.cam.x = this.savedCam.x;
-      game.renderer.cam.y = this.savedCam.y;
+    if (this.savedView) {
+      game.renderer.cam.x = this.savedView.x;
+      game.renderer.cam.y = this.savedView.y;
     }
     game.hud.showHud(true);
     game.hud.toast('BACK TO THE STREETS', 'Photo mode off — the city is moving again.', 2);
@@ -50,7 +51,7 @@ export class PhotoMode {
 
   // Pan the frozen camera with the movement keys.
   pan(dt, input, game) {
-    const cam = game.renderer.cam;
+    const view = game.renderer.cam;
     let dx = 0;
     let dy = 0;
     if (input.down.KeyA || input.down.ArrowLeft) dx -= 1;
@@ -58,20 +59,20 @@ export class PhotoMode {
     if (input.down.KeyW || input.down.ArrowUp) dy -= 1;
     if (input.down.KeyS || input.down.ArrowDown) dy += 1;
     if (dx === 0 && dy === 0) return;
-    const len = Math.hypot(dx, dy);
-    cam.x += (dx / len) * PHOTO.panSpeed * dt;
-    cam.y += (dy / len) * PHOTO.panSpeed * dt;
-    cam.x = Math.max(-80, Math.min(3600 - 1280 + 80, cam.x));
-    cam.y = Math.max(-80, Math.min(2600 - 800 + 80, cam.y));
+    const mag = Math.hypot(dx, dy);
+    view.x += (dx / mag) * PHOTO.panSpeed * dt;
+    view.y += (dy / mag) * PHOTO.panSpeed * dt;
+    view.x = Math.max(-80, Math.min(3600 - 1280 + 80, view.x));
+    view.y = Math.max(-80, Math.min(2600 - 800 + 80, view.y));
   }
 
   // Letterbox bars and a caption over the frozen frame.
   drawFrame(ctx, canvas) {
-    const bar = 54;
+    const band = 54;
     ctx.save();
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, bar);
-    ctx.fillRect(0, canvas.height - bar, canvas.width, bar);
+    ctx.fillRect(0, 0, canvas.width, band);
+    ctx.fillRect(0, canvas.height - band, canvas.width, band);
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.font = 'bold 15px sans-serif';
     ctx.textAlign = 'left';

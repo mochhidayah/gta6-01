@@ -15,29 +15,29 @@
 // — same clock, same light, new internal names.
 import { NIGHT } from './config.js';
 
-const DAY_START_HOUR = 17; // the clock starts here, every session
-const DUSK_START = 18.5; // the sky starts to warm
-const NIGHT_START = 20; // full dark from here
-const NIGHT_END = 5; // dark until here
-const DAWN_END = 7; // fully light again from here
-const DUSK_ALPHA = 0.16; // how warm dusk gets
+const START_HOUR = 17; // the clock starts here, every session
+const DUSK_AT = 18.5; // the sky starts to warm
+const NIGHT_AT = 20; // full dark from here
+const NIGHT_TIL = 5; // dark until here
+const DAWN_AT = 7; // fully light again from here
+const DUSK_WARM = 0.16; // how warm dusk gets
 
 // Fixed stars, scattered once per page load across the sky.
-function makeStars(count) {
-  const out = [];
+function starField(count) {
+  const field = [];
   for (let i = 0; i < count; i++) {
-    out.push({
+    field.push({
       x: Math.random(),
       y: Math.random() * 0.55,
       r: 0.6 + Math.random() * 1.3,
       twinkle: Math.random() * Math.PI * 2,
     });
   }
-  return out;
+  return field;
 }
 
-// Smooth ramp between two hours: 0 before `from`, 1 after `to`.
-function ramp(hour, from, to) {
+// Smooth easeBetween between two hours: 0 before `from`, 1 after `to`.
+function easeBetween(hour, from, to) {
   if (hour <= from) return 0;
   if (hour >= to) return 1;
   return (hour - from) / (to - from);
@@ -45,29 +45,29 @@ function ramp(hour, from, to) {
 
 export class DayNight {
   constructor() {
-    this.stars = makeStars(90);
+    this.stars = starField(90);
     this.time = 0;
   }
 
   // The hour of day, from the game's clock (seconds since 17:00).
   hourOf(game) {
-    return (DAY_START_HOUR + game.clock / 3600) % 24;
+    return (START_HOUR + game.clock / 3600) % 24;
   }
 
   // 0 in daylight, 1 at full night. Dusk and dawn ease in and out.
   darkness(game) {
-    const h = this.hourOf(game);
-    if (h >= NIGHT_START || h < NIGHT_END) return 1;
-    if (h >= DUSK_START && h < NIGHT_START) return ramp(h, DUSK_START, NIGHT_START) * 0.85;
-    if (h >= NIGHT_END && h < DAWN_END) return 1 - ramp(h, NIGHT_END, DAWN_END);
+    const hour = this.hourOf(game);
+    if (hour >= NIGHT_AT || hour < NIGHT_TIL) return 1;
+    if (hour >= DUSK_AT && hour < NIGHT_AT) return easeBetween(hour, DUSK_AT, NIGHT_AT) * 0.85;
+    if (hour >= NIGHT_TIL && hour < DAWN_AT) return 1 - easeBetween(hour, NIGHT_TIL, DAWN_AT);
     return 0;
   }
 
   // How warm the dusk light is: 0 by day, 1 at the orange hour.
   duskWarmth(game) {
-    const h = this.hourOf(game);
-    if (h >= DUSK_START && h < NIGHT_START) return ramp(h, DUSK_START, NIGHT_START);
-    if (h >= NIGHT_END && h < DAWN_END) return 1 - ramp(h, NIGHT_END, DAWN_END);
+    const hour = this.hourOf(game);
+    if (hour >= DUSK_AT && hour < NIGHT_AT) return easeBetween(hour, DUSK_AT, NIGHT_AT);
+    if (hour >= NIGHT_TIL && hour < DAWN_AT) return 1 - easeBetween(hour, NIGHT_TIL, DAWN_AT);
     return 0;
   }
 
@@ -80,38 +80,38 @@ export class DayNight {
   // Called by the renderer after the sunset wash, before the rain.
   draw(ctx, view, game) {
     this.time += 1 / 60;
-    const dark = this.darkness(game);
-    const dusk = this.duskWarmth(game);
-    if (dark <= 0.01 && dusk <= 0.01) return;
+    const shade = this.darkness(game);
+    const warm = this.duskWarmth(game);
+    if (shade <= 0.01 && warm <= 0.01) return;
     ctx.save();
-    if (dusk > 0.01) {
-      ctx.fillStyle = `rgba(255,110,40,${DUSK_ALPHA * dusk})`;
+    if (warm > 0.01) {
+      ctx.fillStyle = `rgba(255,110,40,${DUSK_WARM * warm})`;
       ctx.fillRect(view.x, view.y, view.w, view.h);
     }
-    if (dark > 0.01) {
-      ctx.fillStyle = `rgba(8,12,38,${NIGHT.fullDarkAlpha * dark})`;
+    if (shade > 0.01) {
+      ctx.fillStyle = `rgba(8,12,38,${NIGHT.fullDarkAlpha * shade})`;
       ctx.fillRect(view.x, view.y, view.w, view.h);
-      this.paintStars(ctx, view, dark);
-      this.paintLampGlow(ctx, view, game, dark);
-      this.paintHeadlights(ctx, game, dark);
+      this.drawStars(ctx, view, shade);
+      this.drawLamps(ctx, view, game, shade);
+      this.drawBeams(ctx, game, shade);
     }
     ctx.restore();
   }
 
-  paintStars(ctx, view, dark) {
+  drawStars(ctx, view, dark) {
     ctx.fillStyle = '#ffffff';
-    for (const s of this.stars) {
-      const twinkle = 0.55 + 0.45 * Math.sin(this.time * 2 + s.twinkle);
-      ctx.globalAlpha = dark * twinkle;
+    for (const star of this.stars) {
+      const blink = 0.55 + 0.45 * Math.sin(this.time * 2 + star.twinkle);
+      ctx.globalAlpha = dark * blink;
       ctx.beginPath();
-      ctx.arc(view.x + s.x * view.w, view.y + s.y * view.h, s.r, 0, Math.PI * 2);
+      ctx.arc(view.x + star.x * view.w, view.y + star.y * view.h, star.r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
 
   // Street lamps bloom into warm pools of light after dark.
-  paintLampGlow(ctx, view, game, dark) {
+  drawLamps(ctx, view, game, dark) {
     for (const lamp of game.city.lamps) {
       if (lamp.x < view.x - 60 || lamp.x > view.x + view.w + 60) continue;
       if (lamp.y < view.y - 60 || lamp.y > view.y + view.h + 60) continue;
@@ -131,28 +131,28 @@ export class DayNight {
 
   // Headlight cones: the player's car and nearby police cruisers
   // throw a wedge of light down the road at night.
-  paintHeadlights(ctx, game, dark) {
-    const cars = [];
-    if (game.playerCar) cars.push(game.playerCar);
+  drawBeams(ctx, game, dark) {
+    const lit = [];
+    if (game.playerCar) lit.push(game.playerCar);
     for (const car of game.traffic.cars) {
-      if (car.police && !car.dead) cars.push(car);
+      if (car.police && !car.dead) lit.push(car);
     }
-    for (const car of cars) {
-      const fx = Math.cos(car.angle);
-      const fy = Math.sin(car.angle);
-      const noseX = car.x + fx * (car.w / 2);
-      const noseY = car.y + fy * (car.h / 2);
+    for (const car of lit) {
+      const ux = Math.cos(car.angle);
+      const uy = Math.sin(car.angle);
+      const noseX = car.x + ux * (car.w / 2);
+      const noseY = car.y + uy * (car.h / 2);
       const reach = NIGHT.headlightReach;
       const spread = 0.42;
-      const leftX = noseX + Math.cos(car.angle - spread) * reach;
-      const leftY = noseY + Math.sin(car.angle - spread) * reach;
-      const rightX = noseX + Math.cos(car.angle + spread) * reach;
-      const rightY = noseY + Math.sin(car.angle + spread) * reach;
+      const lx = noseX + Math.cos(car.angle - spread) * reach;
+      const ly = noseY + Math.sin(car.angle - spread) * reach;
+      const rx = noseX + Math.cos(car.angle + spread) * reach;
+      const ry = noseY + Math.sin(car.angle + spread) * reach;
       ctx.fillStyle = `rgba(255,240,180,${0.13 * dark})`;
       ctx.beginPath();
       ctx.moveTo(noseX, noseY);
-      ctx.lineTo(leftX, leftY);
-      ctx.lineTo(rightX, rightY);
+      ctx.lineTo(lx, ly);
+      ctx.lineTo(rx, ry);
       ctx.closePath();
       ctx.fill();
     }

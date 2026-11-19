@@ -5,7 +5,8 @@
 // press, then the frame loop clears it. The mouse position is
 // reported in canvas pixels, scaled from the element's box. v4 rewrote
 // this file wholesale — same behaviour, new structure.
-const PAGE_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+// v5: a couple of local names refreshed, behaviour identical.
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export class Input {
   constructor(canvas) {
@@ -34,7 +35,7 @@ export class Input {
     if (event.repeat) return;
     this.down[event.code] = true;
     this.struck[event.code] = true;
-    if (PAGE_SCROLL_KEYS.has(event.code)) event.preventDefault();
+    if (SCROLL_KEYS.has(event.code)) event.preventDefault();
   }
 
   onKeyUp(event) {
@@ -46,9 +47,9 @@ export class Input {
   }
 
   onMouseMove(event) {
-    const box = this.canvas.getBoundingClientRect();
-    this.mouse.x = (event.clientX - box.left) * (this.canvas.width / box.width);
-    this.mouse.y = (event.clientY - box.top) * (this.canvas.height / box.height);
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouse.x = (event.clientX - rect.left) * (this.canvas.width / rect.width);
+    this.mouse.y = (event.clientY - rect.top) * (this.canvas.height / rect.height);
   }
 
   onMouseDown(event) {
@@ -67,9 +68,9 @@ export class Input {
   // The wheel delta since the last frame (0 when untouched),
   // consumed on read like a key press.
   takeWheel() {
-    const delta = this.wheelDelta;
+    const d = this.wheelDelta;
     this.wheelDelta = 0;
-    return delta;
+    return d;
   }
 
   // True once per physical press of the key.
@@ -81,9 +82,9 @@ export class Input {
 
   // True once per mouse click.
   takeClick() {
-    const clicked = this.mouse.clicked;
+    const hit = this.mouse.clicked;
     this.mouse.clicked = false;
-    return clicked;
+    return hit;
   }
 
   // Call at the end of every frame.

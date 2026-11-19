@@ -4,7 +4,8 @@
 // near — especially with heat on. Knocking one down pays a little
 // cash and heat, and scares the crew off. Missions can muster a
 // named crew at a spot (the Turf War calls the Sharks to the stadium).
-// v4 rewrote this file wholesale — same crews, same tempers, new names.
+// v5 touched this file lightly: same crews, same tempers,
+// a few internal names refreshed.
 import { distSq } from './config.js';
 import { Ped } from './people.js';
 
@@ -13,11 +14,11 @@ const CREWS = [
   { name: 'Vipers', color: '#37c24a', turf: 'docks' },
 ];
 
-const AGGRO_RANGE = 320;
-const ATTACK_RANGE = 28;
-const ATTACK_DAMAGE = 8;
-const ATTACK_COOLDOWN = 1.1;
-const MAX_MEMBERS = 10;
+const AGGRO = 320;
+const HIT_RANGE = 28;
+const HIT_DAMAGE = 8;
+const HIT_COOLDOWN = 1.1;
+const MAX_CREW = 10;
 
 export function crewByName(name) {
   return CREWS.find((c) => c.name === name) || CREWS[0];
@@ -39,21 +40,21 @@ export class GangMember extends Ped {
   update(dt, game, rng) {
     if (this.state === 'down') return;
     if (this.attackTimer > 0) this.attackTimer -= dt;
-    const p = game.player;
-    const near = distSq(this.x, this.y, p.x, p.y) < AGGRO_RANGE * AGGRO_RANGE;
-    const warOn = game.missions.active && game.missions.active.def.id === 'm9';
-    const provoked = game.wanted > 0 || p.weapon === 'pistol' || warOn || this.retaliating;
-    if (near && provoked && (!p.inCar || this.retaliating)) {
-      this.chasePlayer(dt, game);
+    const hero = game.player;
+    const close = distSq(this.x, this.y, hero.x, hero.y) < AGGRO * AGGRO;
+    const war = game.missions.active && game.missions.active.def.id === 'm9';
+    const provoked = game.wanted > 0 || hero.weapon === 'pistol' || war || this.retaliating;
+    if (close && provoked && (!hero.inCar || this.retaliating)) {
+      this.chaseHero(dt, game);
       return;
     }
     super.update(dt, game, rng);
   }
 
-  chasePlayer(dt, game) {
-    const p = game.player;
-    const dx = p.x - this.x;
-    const dy = p.y - this.y;
+  chaseHero(dt, game) {
+    const hero = game.player;
+    const dx = hero.x - this.x;
+    const dy = hero.y - this.y;
     const d = Math.hypot(dx, dy);
     if (d < 1) return;
     this.angle = Math.atan2(dy, dx);
@@ -64,9 +65,9 @@ export class GangMember extends Ped {
       this.x += push.x;
       this.y += push.y;
     }
-    if (d < ATTACK_RANGE && this.attackTimer <= 0) {
-      this.attackTimer = ATTACK_COOLDOWN;
-      p.hurt(ATTACK_DAMAGE, game);
+    if (d < HIT_RANGE && this.attackTimer <= 0) {
+      this.attackTimer = HIT_COOLDOWN;
+      hero.hurt(HIT_DAMAGE, game);
       game.sounds.punch();
       game.addParticles(this.x, this.y, 6, '#e33f2f');
     }
@@ -95,7 +96,7 @@ export class Gangs {
   }
 
   spawn(count, nearX, nearY) {
-    for (let i = 0; i < count && this.members.length < MAX_MEMBERS; i++) {
+    for (let i = 0; i < count && this.members.length < MAX_CREW; i++) {
       const crew = CREWS[Math.floor(this.roll() * CREWS.length)];
       const turf = this.city.landmarks[crew.turf];
       const x = turf.x + (this.roll() - 0.5) * 500;
@@ -107,7 +108,7 @@ export class Gangs {
 
   spawnCrew(crewName, count, x, y) {
     const crew = crewByName(crewName);
-    for (let i = 0; i < count && this.members.length < MAX_MEMBERS; i++) {
+    for (let i = 0; i < count && this.members.length < MAX_CREW; i++) {
       const member = new GangMember(
         x + (this.roll() - 0.5) * 320,
         y + (this.roll() - 0.5) * 320,
@@ -116,7 +117,7 @@ export class Gangs {
       );
       this.members.push(member);
     }
-    return this.members.filter((m) => m.crew.name === crewName);
+    return this.members.filter((member) => member.crew.name === crewName);
   }
 
   // Drop a member of the named crew at the drop point and send them
@@ -126,12 +127,12 @@ export class Gangs {
     if (this.retaliationTimer > 0) return;
     this.retaliationTimer = 45;
     const crew = crewByName(crewName);
-    const p = game.player;
+    const hero = game.player;
     const spawned = [];
-    for (let i = 0; i < 3 && this.members.length < MAX_MEMBERS; i++) {
+    for (let i = 0; i < 3 && this.members.length < MAX_CREW; i++) {
       const member = new GangMember(
-        p.x + (this.roll() - 0.5) * 500,
-        p.y + (this.roll() - 0.5) * 500,
+        hero.x + (this.roll() - 0.5) * 500,
+        hero.y + (this.roll() - 0.5) * 500,
         () => this.roll(),
         crew,
       );
@@ -151,10 +152,10 @@ export class Gangs {
   update(dt, game, rng) {
     if (this.retaliationTimer > 0) this.retaliationTimer -= dt;
     for (const member of this.members) member.update(dt, game, rng);
-    const px = game.player.x;
-    const py = game.player.y;
-    this.members = this.members.filter((m) => {
-      if (m.state === 'down') return distSq(m.x, m.y, px, py) < 700 * 700;
+    const hx = game.player.x;
+    const hy = game.player.y;
+    this.members = this.members.filter((member) => {
+      if (member.state === 'down') return distSq(member.x, member.y, hx, hy) < 700 * 700;
       return true;
     });
   }

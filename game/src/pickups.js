@@ -12,16 +12,16 @@
 import { distSq, PICKUP_RULES } from './config.js';
 import { gauss } from './rng.js';
 
-const GRAB_RADIUS = 40;
+const GRAB_R = 40;
 // What each pickup gives and how fast it returns lives in
 // config.js (PICKUP_RULES).
-const AMMO_ROUNDS = PICKUP_RULES.ammoRounds;
-const HEALTH_AMOUNT = PICKUP_RULES.healthAmount;
-const CASH_AMOUNT = PICKUP_RULES.cashAmount;
-const RESPAWN_SECONDS = PICKUP_RULES.respawnSeconds;
+const AMMO = PICKUP_RULES.ammoRounds;
+const HEAL = PICKUP_RULES.healthAmount;
+const CASH = PICKUP_RULES.cashAmount;
+const RESPAWN = PICKUP_RULES.respawnSeconds;
 
 // Fixed spots: what waits there, and where.
-const PICKUP_SPOTS = [
+const SPOTS = [
   { kind: 'ammo', place: 'pawnshop', dx: -70, dy: 40 },
   { kind: 'ammo', place: 'stadium', dx: 90, dy: -60 },
   { kind: 'ammo', place: 'docks', dx: -80, dy: 30 },
@@ -36,12 +36,12 @@ const PICKUP_SPOTS = [
 
 export class Pickups {
   constructor(city) {
-    this.items = PICKUP_SPOTS.map((s) => {
-      const spot = city.landmarks[s.place];
+    this.items = SPOTS.map((def) => {
+      const spot = city.landmarks[def.place];
       return {
-        kind: s.kind,
-        x: spot.x + s.dx,
-        y: spot.y + s.dy,
+        kind: def.kind,
+        x: spot.x + def.dx,
+        y: spot.y + def.dy,
         taken: false,
         respawn: 0,
       };
@@ -49,56 +49,56 @@ export class Pickups {
   }
 
   update(dt, game) {
-    const p = game.player;
+    const hero = game.player;
     for (const item of this.items) {
       if (item.taken) {
         item.respawn -= dt;
         if (item.respawn <= 0) item.taken = false;
         continue;
       }
-      if (p.inCar) continue;
-      if (distSq(p.x, p.y, item.x, item.y) > GRAB_RADIUS * GRAB_RADIUS) continue;
-      this.collect(item, game);
+      if (hero.inCar) continue;
+      if (distSq(hero.x, hero.y, item.x, item.y) > GRAB_R * GRAB_R) continue;
+      this.grab(item, game);
     }
   }
 
-  collect(item, game) {
-    const p = game.player;
+  grab(item, game) {
+    const hero = game.player;
     item.taken = true;
     // The respawn delay wobbles around 50 seconds so the city never
     // feels metronomic.
-    item.respawn = gauss(game.rng, RESPAWN_SECONDS, 5, 40, 60);
+    item.respawn = gauss(game.rng, RESPAWN, 5, 40, 60);
     if (item.kind === 'ammo') {
-      if (p.weapon !== 'pistol') {
-        p.weapon = 'pistol';
-        p.ammo = AMMO_ROUNDS;
-        game.hud.toast('PISTOL FOUND', `An ammo box with a pistol inside — ${AMMO_ROUNDS} rounds. Press 2 to draw it.`, 4);
+      if (hero.weapon !== 'pistol') {
+        hero.weapon = 'pistol';
+        hero.ammo = AMMO;
+        game.hud.toast('PISTOL FOUND', `An ammo box with a pistol inside — ${AMMO} rounds. Press 2 to draw it.`, 4);
       } else {
-        p.ammo += AMMO_ROUNDS;
-        game.hud.toast('AMMO', `+${AMMO_ROUNDS} rounds — ${p.ammo} in the mag.`, 3);
+        hero.ammo += AMMO;
+        game.hud.toast('AMMO', `+${AMMO} rounds — ${hero.ammo} in the mag.`, 3);
       }
       game.sounds.pickup();
       game.addParticles(item.x, item.y, 8, '#f2c230');
       return;
     }
     if (item.kind === 'health') {
-      if (p.health >= 100) {
+      if (hero.health >= 100) {
         // Full health: leave the kit where it is.
         item.taken = false;
         item.respawn = 0;
         return;
       }
-      p.heal(HEALTH_AMOUNT);
+      hero.heal(HEAL);
       game.sounds.pickup();
       game.addParticles(item.x, item.y, 8, '#58d068');
-      game.hud.toast('MEDKIT', `+${HEALTH_AMOUNT} HP — patched up and back in the fight.`, 3);
+      game.hud.toast('MEDKIT', `+${HEAL} HP — patched up and back in the fight.`, 3);
       return;
     }
     // Cash: a dropped wallet, finders keepers.
-    p.money += CASH_AMOUNT;
-    if (game.stats) game.stats.recordEarned(CASH_AMOUNT);
+    hero.money += CASH;
+    if (game.stats) game.stats.recordEarned(CASH);
     game.sounds.cash();
     game.addParticles(item.x, item.y, 10, '#7dff8a');
-    game.hud.toast('FOUND CASH', `+$${CASH_AMOUNT} — someone's wallet, now yours.`, 3);
+    game.hud.toast('FOUND CASH', `+$${CASH} — someone's wallet, now yours.`, 3);
   }
 }

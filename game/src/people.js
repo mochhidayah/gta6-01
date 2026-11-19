@@ -2,16 +2,16 @@
 // State machine — stroll, chat, flee, down — in five kinds: walkers,
 // joggers, loiterers, vendors at a food stall, taxi drivers by the
 // kerb. Vendors never move: walk up, press E, snack $15, +25 HP.
-// v4 rewrote this file wholesale — same people, same behaviour, new
-// internal names and structure.
+// v5 touched this file lightly: same people, same behaviour,
+// a few internal names refreshed.
 import { PLAYER_STATS, PED_NAMES, SHORE, SNACK, clamp, distSq } from './config.js';
 import { AVENUES, STREETS } from './city.js';
 import { seeded, choose, between } from './rng.js';
 
-let nextPedId = 1;
+let nextId = 1;
 
-const SHIRT_COLORS = ['#d94f70', '#4f7fd9', '#e8b23f', '#58a86b', '#9a5fd0', '#d97b4f'];
-const SKIN_TONES = ['#f0c8a0', '#c98d5f', '#8a5a3b', '#f5d7b0'];
+const SHIRTS = ['#d94f70', '#4f7fd9', '#e8b23f', '#58a86b', '#9a5fd0', '#d97b4f'];
+const SKINS = ['#f0c8a0', '#c98d5f', '#8a5a3b', '#f5d7b0'];
 
 // Fixed stalls: one on the Marina strip, one outside Club Flamingo.
 export const VENDOR_SPOTS = [
@@ -19,33 +19,33 @@ export const VENDOR_SPOTS = [
   { x: 2100, y: 700, angle: Math.PI / 2 },
 ];
 
-function shortestTurn(d) {
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
+function shortestArc(delta) {
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  return delta;
 }
 
-function readMoveInput(keys) {
-  let ix = 0;
-  let iy = 0;
-  if (keys.KeyW || keys.ArrowUp) iy -= 1;
-  if (keys.KeyS || keys.ArrowDown) iy += 1;
-  if (keys.KeyA || keys.ArrowLeft) ix -= 1;
-  if (keys.KeyD || keys.ArrowRight) ix += 1;
-  const len = Math.hypot(ix, iy);
-  if (len === 0) return null;
-  return { x: ix / len, y: iy / len };
+function readMoveDir(keys) {
+  let mx = 0;
+  let my = 0;
+  if (keys.KeyW || keys.ArrowUp) my -= 1;
+  if (keys.KeyS || keys.ArrowDown) my += 1;
+  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
+  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  const mag = Math.hypot(mx, my);
+  if (mag === 0) return null;
+  return { x: mx / mag, y: my / mag };
 }
 
 export class Ped {
   constructor(x, y, rng, kind = 'walker') {
-    this.id = nextPedId++;
+    this.id = nextId++;
     this.x = x;
     this.y = y;
     this.kind = kind; // walker | jogger | loiterer | vendor | taxiDriver | tourist
     this.name = choose(rng, PED_NAMES);
-    this.color = SHIRT_COLORS[Math.floor(rng() * SHIRT_COLORS.length)];
-    this.skin = SKIN_TONES[Math.floor(rng() * SKIN_TONES.length)];
+    this.color = SHIRTS[Math.floor(rng() * SHIRTS.length)];
+    this.skin = SKINS[Math.floor(rng() * SKINS.length)];
     this.angle = rng() * Math.PI * 2;
     this.speed = kind === 'jogger' ? between(rng, 110, 150) : between(rng, 35, 70);
     this.state = 'stroll'; // stroll | chat | flee | down
@@ -59,7 +59,7 @@ export class Ped {
   }
 
   // Destination by kind: joggers the beach, loiterers nearby, walkers the city.
-  chooseDestination(rng) {
+  pickDestination(rng) {
     if (this.kind === 'jogger') {
       this.target = {
         x: between(rng, 120, 3400),
@@ -70,15 +70,15 @@ export class Ped {
     // Tourists drift between the sights: the marina, the park, the
     // beachfront — camera out, stopping to take in the view.
     if (this.kind === 'tourist') {
-      const sights = [
+      const stops = [
         { x: 2900, y: 2260 },
         { x: 1560, y: 800 },
         { x: 800, y: 2400 },
       ];
-      const sight = sights[Math.floor(rng() * sights.length)];
+      const stop = stops[Math.floor(rng() * stops.length)];
       this.target = {
-        x: sight.x + between(rng, -120, 120),
-        y: sight.y + between(rng, -120, 120),
+        x: stop.x + between(rng, -120, 120),
+        y: stop.y + between(rng, -120, 120),
       };
       return;
     }
@@ -117,7 +117,7 @@ export class Ped {
     // A tourist pauses at every sight to take a photo, then drifts on.
     if (this.kind === 'tourist' && this.idleTimer > 0) {
       this.idleTimer -= dt;
-      if (this.idleTimer <= 0) this.chooseDestination(rng);
+      if (this.idleTimer <= 0) this.pickDestination(rng);
       return;
     }
     if (this.state === 'chat') {
@@ -141,31 +141,31 @@ export class Ped {
     }
     if (this.kind === 'loiterer' && this.idleTimer > 0) {
       this.idleTimer -= dt;
-      if (this.idleTimer <= 0) this.chooseDestination(rng);
+      if (this.idleTimer <= 0) this.pickDestination(rng);
       return;
     }
-    if (!this.target) this.chooseDestination(rng);
-    this.walkTowardTarget(dt, game);
+    if (!this.target) this.pickDestination(rng);
+    this.stepTowardTarget(dt, game);
   }
 
   // Step toward the target, turning smoothly, sliding out of buildings.
-  walkTowardTarget(dt, game) {
+  stepTowardTarget(dt, game) {
     const dx = this.target.x - this.x;
     const dy = this.target.y - this.y;
-    const d = Math.hypot(dx, dy);
-    if (d < 12) {
+    const gap = Math.hypot(dx, dy);
+    if (gap < 12) {
       this.target = null;
       if (this.kind === 'loiterer') this.idleTimer = between(Math.random, 3, 9);
       // A tourist who arrives at a sight stops to take a photo.
       if (this.kind === 'tourist') this.idleTimer = between(Math.random, 2, 5);
       return true;
     }
-    const want = Math.atan2(dy, dx);
-    const turnRate = this.state === 'flee' ? 4 : 3;
-    this.angle += clamp(shortestTurn(want - this.angle), -turnRate * dt, turnRate * dt);
-    const speed = this.state === 'flee' ? this.speed * 2.4 : this.speed;
-    this.x += Math.cos(this.angle) * speed * dt;
-    this.y += Math.sin(this.angle) * speed * dt;
+    const aim = Math.atan2(dy, dx);
+    const spin = this.state === 'flee' ? 4 : 3;
+    this.angle += clamp(shortestArc(aim - this.angle), -spin * dt, spin * dt);
+    const pace = this.state === 'flee' ? this.speed * 2.4 : this.speed;
+    this.x += Math.cos(this.angle) * pace * dt;
+    this.y += Math.sin(this.angle) * pace * dt;
     const push = game.city.collideCircle(this.x, this.y, this.r);
     if (push) {
       this.x += push.x;
@@ -174,17 +174,17 @@ export class Ped {
     return false;
   }
 
-  tryChatWith(other, rng) {
+  tryChat(other, rng) {
     if (this.kind !== 'walker' || other.kind !== 'walker') return false;
     if (this.state !== 'stroll' || other.state !== 'stroll') return false;
     if (rng() > 0.35) return false;
-    const seconds = between(rng, 3, 7);
+    const secs = between(rng, 3, 7);
     this.state = 'chat';
-    this.chatTimer = seconds;
+    this.chatTimer = secs;
     this.chatPartner = other;
     this.target = null;
     other.state = 'chat';
-    other.chatTimer = seconds;
+    other.chatTimer = secs;
     other.chatPartner = this;
     other.target = null;
     return true;
@@ -229,13 +229,13 @@ export class Player {
   }
 
   move(keys, dt, game) {
-    const dir = readMoveInput(keys);
-    if (dir) {
+    const vec = readMoveDir(keys);
+    if (vec) {
       this.sprint = !!(keys.ShiftLeft || keys.ShiftRight);
       const speed = this.sprint ? PLAYER_STATS.sprint : PLAYER_STATS.walk;
-      this.vx = dir.x * speed;
-      this.vy = dir.y * speed;
-      this.angle = Math.atan2(dir.y, dir.x);
+      this.vx = vec.x * speed;
+      this.vy = vec.y * speed;
+      this.angle = Math.atan2(vec.y, vec.x);
     } else {
       // Friction: coast to a stop.
       const damp = Math.max(0, 1 - 10 * dt);
@@ -301,33 +301,33 @@ export class Player {
     return landed;
   }
 
-  firstAlongRay(game, x, y, angle, rangePx) {
+  firstOnRay(game, x, y, angle, rangePx) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     let best = null;
-    let bestAlong = rangePx;
-    const consider = (ox, oy, r, obj) => {
+    let bestLen = rangePx;
+    const probe = (ox, oy, r, obj) => {
       const dx = ox - x;
       const dy = oy - y;
       const along = dx * cos + dy * sin;
-      if (along < 0 || along > bestAlong) return;
+      if (along < 0 || along > bestLen) return;
       const perp = Math.abs(-dx * sin + dy * cos);
       if (perp < r + 6) {
-        bestAlong = along;
+        bestLen = along;
         best = obj;
       }
     };
     for (const ped of game.crowd.peds) {
-      if (ped.state !== 'down') consider(ped.x, ped.y, ped.r, { kind: 'ped', ped });
+      if (ped.state !== 'down') probe(ped.x, ped.y, ped.r, { kind: 'ped', ped });
     }
     for (const cop of game.cops) {
-      if (cop.state !== 'down') consider(cop.x, cop.y, cop.r, { kind: 'cop', cop });
+      if (cop.state !== 'down') probe(cop.x, cop.y, cop.r, { kind: 'cop', cop });
     }
     for (const member of game.gangs.members) {
-      if (member.state !== 'down') consider(member.x, member.y, member.r, { kind: 'gang', member });
+      if (member.state !== 'down') probe(member.x, member.y, member.r, { kind: 'gang', member });
     }
     for (const car of game.traffic.cars) {
-      if (!car.dead) consider(car.x, car.y, 24, { kind: 'car', car });
+      if (!car.dead) probe(car.x, car.y, 24, { kind: 'car', car });
     }
     return best;
   }
@@ -343,7 +343,7 @@ export class Player {
     const endX = this.x + Math.cos(this.angle) * rangePx;
     const endY = this.y + Math.sin(this.angle) * rangePx;
     game.addTracer(this.x, this.y, endX, endY);
-    const hit = this.firstAlongRay(game, this.x, this.y, this.angle, rangePx);
+    const hit = this.firstOnRay(game, this.x, this.y, this.angle, rangePx);
     if (hit) {
       if (hit.kind === 'ped') {
         hit.ped.knockDown();
@@ -416,16 +416,16 @@ export class Crowd {
 
   spawn(count, nearX, nearY) {
     for (let i = 0; i < count; i++) {
-      const roll = this.rng();
+      const dice = this.rng();
       const x = nearX + (this.rng() - 0.5) * 1500;
       const y = nearY + (this.rng() - 0.5) * 1100;
-      if (roll < 0.15) {
+      if (dice < 0.15) {
         this.peds.push(new Ped(between(this.rng, 200, 3400), SHORE.sandY + between(this.rng, 25, 110), this.rng, 'jogger'));
-      } else if (roll < 0.3) {
+      } else if (dice < 0.3) {
         const spots = Object.values(this.city.landmarks);
         const spot = spots[Math.floor(this.rng() * spots.length)];
         this.peds.push(new Ped(spot.x + between(this.rng, -90, 90), spot.y + between(this.rng, -90, 90), this.rng, 'loiterer'));
-      } else if (roll < 0.42) {
+      } else if (dice < 0.42) {
         // Tourists with cameras, drifting between the sights.
         this.peds.push(new Ped(between(this.rng, 200, 3400), between(this.rng, 200, 2200), this.rng, 'tourist'));
       } else {
@@ -466,25 +466,25 @@ export class Crowd {
 
   update(dt, game) {
     for (const ped of this.peds) ped.update(dt, game, this.rng);
-    this.pairUpChatters();
-    const px = game.player.x;
-    const py = game.player.y;
+    this.pairChatters();
+    const hx = game.player.x;
+    const hy = game.player.y;
     this.peds = this.peds.filter((ped) => {
       // Vendors and taxi drivers are fixtures: they never despawn.
       if (ped.kind === 'vendor' || ped.kind === 'taxiDriver') return true;
       const limit = ped.state === 'down' ? 900 : 1300;
-      return distSq(ped.x, ped.y, px, py) < limit * limit;
+      return distSq(ped.x, ped.y, hx, hy) < limit * limit;
     });
   }
 
-  pairUpChatters() {
-    const walkers = this.peds.filter((p) => p.state === 'stroll' && p.kind === 'walker');
+  pairChatters() {
+    const walkers = this.peds.filter((ped) => ped.state === 'stroll' && ped.kind === 'walker');
     for (let i = 0; i < walkers.length; i++) {
       for (let j = i + 1; j < walkers.length; j++) {
-        const a = walkers[i];
-        const b = walkers[j];
-        if (a.state !== 'stroll' || b.state !== 'stroll') continue;
-        if (distSq(a.x, a.y, b.x, b.y) < 40 * 40) a.tryChatWith(b, this.rng);
+        const first = walkers[i];
+        const second = walkers[j];
+        if (first.state !== 'stroll' || second.state !== 'stroll') continue;
+        if (distSq(first.x, first.y, second.x, second.y) < 40 * 40) first.tryChat(second, this.rng);
       }
     }
   }
