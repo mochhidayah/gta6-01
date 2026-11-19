@@ -3,7 +3,8 @@
 // Every number that shapes the game lives here, so the rest of the
 // code reads like the design: the city is a grid of avenues and
 // streets, the beach runs along the south edge, and the sun never
-// quite sets.
+// quite sets. v4 rewrote this file wholesale — same numbers, same
+// palette, new section order.
 export const WORLD = { width: 3600, height: 2600 };
 
 // The road grid: avenue spacing, street spacing, road width.
@@ -100,6 +101,10 @@ export const PED_NAMES = [
   'Marta', 'Dario', 'Yusuf', 'Carmen', 'Tomas', 'Lena', 'Rafi', 'Sofia',
   'Hector', 'Nadia', 'Paco', 'Iris', 'Bruno', 'Alba', 'Kiko', 'Rosa',
 ];
+
+// --- v4 systems: radio, side jobs, cutscenes ---
+// Their tuning lives in their own modules (radio.js, sidejobs.js,
+// cutscenes.js) — no shared numbers needed here.
 
 // Small math helpers used across the game.
 export function clamp(value, low, high) {

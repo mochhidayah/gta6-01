@@ -4,6 +4,7 @@
 // near — especially with heat on. Knocking one down pays a little
 // cash and heat, and scares the crew off. Missions can muster a
 // named crew at a spot (the Turf War calls the Sharks to the stadium).
+// v4 rewrote this file wholesale — same crews, same tempers, new names.
 import { distSq } from './config.js';
 import { Ped } from './people.js';
 

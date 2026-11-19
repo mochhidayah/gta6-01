@@ -2,7 +2,8 @@
 // cruisers, police chases, and the two new rides — a motorcycle
 // (fast, fragile) and a city bus (slow, nearly unkillable).
 // Traffic follows waypoint loops on the road grid; police cars
-// steer at Marco and ram.
+// steer at Marco and ram. v4 rewrote this file wholesale — same
+// handling, same traffic, new internal names.
 import { WORLD, CAR_STATS, CAR_CATALOG, ARMORED_VAN, clamp, wrapAngle, distSq } from './config.js';
 import { AVENUES, STREETS, onRoad, roadPointNear } from './city.js';
 import { seeded, choose, between } from './rng.js';

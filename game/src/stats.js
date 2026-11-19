@@ -9,7 +9,8 @@
 //
 // Achievements are checked once a second, not every frame, so the
 // toast spam stays down and a single stunt cannot unlock two at
-// once.
+// once. v4 rewrote this file wholesale — same counters, same
+// achievements, new structure.
 const CHECK_EVERY = 1; // seconds between achievement checks
 
 // id, name, what it takes, reward. The `check` reads the counters.

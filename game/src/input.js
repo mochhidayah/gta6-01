@@ -3,8 +3,9 @@
 // The game reads keys by code (KeyW, Space, ...) so layouts do not
 // matter. `wasPressed` is edge-triggered: true once per physical
 // press, then the frame loop clears it. The mouse position is
-// reported in canvas pixels, scaled from the element's box.
-const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+// reported in canvas pixels, scaled from the element's box. v4 rewrote
+// this file wholesale — same behaviour, new structure.
+const PAGE_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export class Input {
   constructor(canvas) {
@@ -33,7 +34,7 @@ export class Input {
     if (event.repeat) return;
     this.down[event.code] = true;
     this.struck[event.code] = true;
-    if (SCROLL_KEYS.has(event.code)) event.preventDefault();
+    if (PAGE_SCROLL_KEYS.has(event.code)) event.preventDefault();
   }
 
   onKeyUp(event) {

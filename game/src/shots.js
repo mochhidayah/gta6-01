@@ -2,7 +2,9 @@
 // photogenic state so the entry's screenshots are real renders of the
 // game itself. The game keeps running — cars move, sirens blink.
 // Scenes: cover (police chase), downtown (on foot), mission (bank job),
-// beach (sunset drive along Coral Bay).
+// beach (sunset drive along Coral Bay). v4 rewrote this file wholesale
+// — same scenes, same framing — with one fix: the staged mission state
+// now carries defeatBase, so a staged defeat step counts correctly.
 import { AVENUES, STREETS } from './city.js';
 import { Car } from './vehicles.js';
 import { STORY } from './missions.js';
@@ -28,7 +30,7 @@ function giveCar(game, x, y, angle, modelIndex, speed) {
 // Jump the story to one mission at one step.
 function setMission(game, storyIndex, step, holdT = 0) {
   game.missions.storyIndex = storyIndex;
-  game.missions.active = { def: STORY[storyIndex], step, timer: 0, holdT };
+  game.missions.active = { def: STORY[storyIndex], step, timer: 0, holdT, defeatBase: 0 };
 }
 
 const SCENES = {

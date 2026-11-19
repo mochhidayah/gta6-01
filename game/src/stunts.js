@@ -7,15 +7,16 @@
 // roughly along it, and fast, for the launch to trigger. While the
 // car is airborne the renderer lifts the body above its shadow, and
 // the car keeps its speed — it is still moving, just not touching
-// the road.
+// the road. v4 rewrote this file wholesale — same ramps, same payouts,
+// new internal names.
 import { distSq } from './config.js';
 
-const MIN_LAUNCH_SPEED = 250;
+const LAUNCH_MIN_SPEED = 250;
 const ALIGN_COS = 0.7; // within ~45 degrees of the ramp's direction
 const TRIGGER_RADIUS = 34;
-const AIR_TIME = 0.9; // seconds in the air
-const PEAK_HEIGHT = 34; // pixels the body lifts at the top of the arc
-const CASH_PER_SECOND = 120;
+const FLIGHT_SECONDS = 0.9; // seconds in the air
+const PEAK_LIFT = 34; // pixels the body lifts at the top of the arc
+const CASH_PER_AIR_SECOND = 120;
 
 // Fixed ramps, one per corner of the map, each facing down a road.
 const RAMP_SPOTS = [
@@ -48,11 +49,11 @@ export class StuntRamps {
     for (const ramp of this.ramps) {
       if (ramp.cooldown > 0) continue;
       if (distSq(car.x, car.y, ramp.x, ramp.y) > TRIGGER_RADIUS * TRIGGER_RADIUS) continue;
-      if (Math.abs(car.speed) < MIN_LAUNCH_SPEED) continue;
+      if (Math.abs(car.speed) < LAUNCH_MIN_SPEED) continue;
       const along = Math.cos(car.angle) * Math.cos(ramp.angle) + Math.sin(car.angle) * Math.sin(ramp.angle);
       if (along < ALIGN_COS) continue;
       ramp.cooldown = 3;
-      car.air = { t: 0, total: AIR_TIME };
+      car.air = { t: 0, total: FLIGHT_SECONDS };
       car.airAngle = car.angle; // the takeoff line — land straight on it for PERFECT
       game.sounds.horn();
       game.toast('STUNT RAMP', 'Airtime! Stay smooth for the landing.', 2);
@@ -76,8 +77,8 @@ export class StuntRamps {
       this.lastJumpAt = game.elapsed;
       if (game.stats) game.stats.recordJump();
       const straight = Math.abs(((car.angle - car.airAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.26;
-      const perfect = straight && Math.abs(car.speed) > MIN_LAUNCH_SPEED;
-      let reward = Math.round(airTime * CASH_PER_SECOND * (1 + 0.5 * (this.combo - 1)));
+      const perfect = straight && Math.abs(car.speed) > LAUNCH_MIN_SPEED;
+      let reward = Math.round(airTime * CASH_PER_AIR_SECOND * (1 + 0.5 * (this.combo - 1)));
       if (perfect) reward *= 2;
       if (game.stats) game.stats.recordEarned(reward);
       game.player.money += reward;
@@ -93,6 +94,6 @@ export class StuntRamps {
       return;
     }
     // Parabola: 0 at take-off and landing, peak in the middle.
-    car.airHeight = PEAK_HEIGHT * 4 * done * (1 - done);
+    car.airHeight = PEAK_LIFT * 4 * done * (1 - done);
   }
 }

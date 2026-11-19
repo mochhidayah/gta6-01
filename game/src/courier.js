@@ -4,7 +4,8 @@
 // at one, drop it at the other before the clock runs out. Pay scales
 // with the distance, and the deadline is generous enough to drive
 // there, but not to sightsee on the way. The run is a small state
-// machine: pickup, then deliver, then done or expired.
+// machine: pickup, then deliver, then done or expired. v4 rewrote
+// this file wholesale — same jobs, same payouts, new internal names.
 import { distSq } from './config.js';
 import { shuffle } from './rng.js';
 
@@ -41,7 +42,7 @@ function prettyName(key) {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
 }
 
-function near(px, py, spot) {
+function nearSpot(px, py, spot) {
   return distSq(px, py, spot.x, spot.y) < MARKER_RADIUS * MARKER_RADIUS;
 }
 
@@ -95,13 +96,13 @@ export class CourierRun {
       return 'expired';
     }
     if (this.stage === 'pickup') {
-      if (near(px, py, this.pickup)) {
+      if (nearSpot(px, py, this.pickup)) {
         this.stage = 'deliver';
         return 'picked';
       }
       return null;
     }
-    if (near(px, py, this.drop)) {
+    if (nearSpot(px, py, this.drop)) {
       this.stage = 'done';
       return 'delivered';
     }

@@ -7,11 +7,12 @@
 // the hospital and the club for a Marco who picked the wrong fight.
 // Cash drops are pure luck: a dropped wallet on a street corner.
 // Every pickup comes back about a minute after it is taken, so the
-// city never runs dry.
+// city never runs dry. v4 rewrote this file wholesale — same spots,
+// same payouts, new internal names.
 import { distSq, PICKUP_RULES } from './config.js';
 import { gauss } from './rng.js';
 
-const PICKUP_RADIUS = 40;
+const GRAB_RADIUS = 40;
 // What each pickup gives and how fast it returns lives in
 // config.js (PICKUP_RULES).
 const AMMO_ROUNDS = PICKUP_RULES.ammoRounds;
@@ -56,7 +57,7 @@ export class Pickups {
         continue;
       }
       if (p.inCar) continue;
-      if (distSq(p.x, p.y, item.x, item.y) > PICKUP_RADIUS * PICKUP_RADIUS) continue;
+      if (distSq(p.x, p.y, item.x, item.y) > GRAB_RADIUS * GRAB_RADIUS) continue;
       this.collect(item, game);
     }
   }

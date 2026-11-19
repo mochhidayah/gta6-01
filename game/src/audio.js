@@ -1,7 +1,10 @@
 // Every sound in Palmera Bay is synthesised live with WebAudio:
 // an engine hum, two-tone sirens, gunshots, pickups and three
 // little radio stations a step sequencer plays. No audio files,
-// no network — nothing to download.
+// no network — nothing to download. v4 rewrote this file wholesale
+// — same voices, same effects — with one change: the bank's own
+// radio sequencer no longer starts in ensure(), because radio.js
+// owns the music now (two sequencers at once sounded like a fight).
 const STATION_DEFS = [
   { name: 'Sunset FM', scale: [110, 130.8, 164.8, 196, 220], bass: [0, 0, 2, 0, 3, 0, 4, 1] },
   { name: 'Radio Palma', scale: [98, 116.5, 146.8, 174.6, 196], bass: [0, 2, 0, 4, 0, 3, 1, 2] },
@@ -55,7 +58,7 @@ export class SoundBank {
     this.master.connect(this.ctx.destination);
     this.renderNoise();
     this.startEngineVoice();
-    this.startRadio();
+    // No startRadio() here any more: radio.js owns the music.
   }
 
   // One second of white noise, rendered once and reused by every burst.
@@ -253,7 +256,7 @@ export class SoundBank {
     this.arpeggio([523, 659, 784, 1046, 1318], 100, 0.2, 'square', 0.16);
   }
 
-  // --- radio ---
+  // --- radio (legacy: radio.js owns the music in v4) ---
 
   nextStation() {
     this.station = (this.station + 1) % STATION_DEFS.length;
@@ -262,6 +265,7 @@ export class SoundBank {
   }
 
   // A tiny step sequencer: a bass pattern plus a sparkle arp per station.
+  // Kept for compatibility; nothing starts it any more.
   startRadio() {
     this.musicTimer = setInterval(() => {
       if (!this.ctx || this.muted || !this.radioOn) return;

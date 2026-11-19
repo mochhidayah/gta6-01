@@ -2,6 +2,8 @@
 // State machine — stroll, chat, flee, down — in five kinds: walkers,
 // joggers, loiterers, vendors at a food stall, taxi drivers by the
 // kerb. Vendors never move: walk up, press E, snack $15, +25 HP.
+// v4 rewrote this file wholesale — same people, same behaviour, new
+// internal names and structure.
 import { PLAYER_STATS, PED_NAMES, SHORE, SNACK, clamp, distSq } from './config.js';
 import { AVENUES, STREETS } from './city.js';
 import { seeded, choose, between } from './rng.js';

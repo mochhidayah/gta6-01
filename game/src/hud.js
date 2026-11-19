@@ -2,7 +2,8 @@
 // objective tracker, speed, weapon, radio, clock, toasts, menus.
 // The tracker (top-left) shows mission title, step, timer. The heat
 // bar fills as the wanted level nears its next star; a helicopter
-// badge appears while the chopper watches.
+// badge appears while the chopper watches. v4 rewrote this file
+// wholesale — same elements, same text, new internal names.
 const ELEMENT_IDS = [
   'hud', 'health-fill', 'health-num', 'money', 'stars', 'heat-fill', 'heat-wrap',
   'heli-alert', 'objective', 'objective-title', 'objective-step', 'objective-timer',

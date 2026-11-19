@@ -1,7 +1,8 @@
 // PoliceDirector: the wanted level, cruisers, foot cops, the
 // helicopter, and roadblocks. Stars only fall while nobody can
 // see Marco: sight is distance plus a building check, so walls
-// and alleys are real cover.
+// and alleys are real cover. v4 rewrote this file wholesale — same
+// heat, same chases, new internal names.
 import { WANTED_RULES, distSq } from './config.js';
 import { Ped } from './people.js';
 

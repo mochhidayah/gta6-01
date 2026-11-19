@@ -12,7 +12,8 @@
 // The race is a side activity with teeth: it pays better than a
 // taxi fare, but a crash at speed costs health, and the precinct
 // notices a screaming pack of cars at 2am — winning a race adds
-// a star of heat.
+// a star of heat. v4 rewrote this file wholesale — same route, same
+// prizes, new internal names.
 import { clamp, wrapAngle, distSq, RACE } from './config.js';
 import { pickWeighted } from './rng.js';
 

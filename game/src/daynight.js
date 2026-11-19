@@ -11,7 +11,8 @@
 // of play, so a single session can watch the sun go down, and the
 // screenshots (taken at 17:00) always show the bright city.
 // Tuning lives in config.js (NIGHT): how dark, how far the lamps
-// glow, how far the headlights reach.
+// glow, how far the headlights reach. v4 rewrote this file wholesale
+// — same clock, same light, new internal names.
 import { NIGHT } from './config.js';
 
 const DAY_START_HOUR = 17; // the clock starts here, every session
@@ -90,14 +91,14 @@ export class DayNight {
     if (dark > 0.01) {
       ctx.fillStyle = `rgba(8,12,38,${NIGHT.fullDarkAlpha * dark})`;
       ctx.fillRect(view.x, view.y, view.w, view.h);
-      this.drawStars(ctx, view, dark);
-      this.drawLampGlow(ctx, view, game, dark);
-      this.drawHeadlights(ctx, game, dark);
+      this.paintStars(ctx, view, dark);
+      this.paintLampGlow(ctx, view, game, dark);
+      this.paintHeadlights(ctx, game, dark);
     }
     ctx.restore();
   }
 
-  drawStars(ctx, view, dark) {
+  paintStars(ctx, view, dark) {
     ctx.fillStyle = '#ffffff';
     for (const s of this.stars) {
       const twinkle = 0.55 + 0.45 * Math.sin(this.time * 2 + s.twinkle);
@@ -110,7 +111,7 @@ export class DayNight {
   }
 
   // Street lamps bloom into warm pools of light after dark.
-  drawLampGlow(ctx, view, game, dark) {
+  paintLampGlow(ctx, view, game, dark) {
     for (const lamp of game.city.lamps) {
       if (lamp.x < view.x - 60 || lamp.x > view.x + view.w + 60) continue;
       if (lamp.y < view.y - 60 || lamp.y > view.y + view.h + 60) continue;
@@ -130,7 +131,7 @@ export class DayNight {
 
   // Headlight cones: the player's car and nearby police cruisers
   // throw a wedge of light down the road at night.
-  drawHeadlights(ctx, game, dark) {
+  paintHeadlights(ctx, game, dark) {
     const cars = [];
     if (game.playerCar) cars.push(game.playerCar);
     for (const car of game.traffic.cars) {

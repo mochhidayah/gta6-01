@@ -5,7 +5,8 @@
 // or two it rolls the dice, and sometimes the rain comes in for half
 // a minute or so. Rain is visual only — streaks across the screen
 // and a darker sky — so it never changes how the game plays, only
-// how it feels. The HUD announces a change with a toast.
+// how it feels. The HUD announces a change with a toast. v4 rewrote
+// this file wholesale — same spells, same timings, new structure.
 const CLEAR_MIN = 75; // seconds of clear sky before the next roll
 const CLEAR_MAX = 150;
 const RAIN_MIN = 25; // seconds a downpour lasts

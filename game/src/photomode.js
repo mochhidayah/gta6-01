@@ -9,7 +9,8 @@
 // Photo mode is a toy, but it is a useful one: the screenshots in
 // screenshots/ are real renders of the game, and a player who
 // frames a chase at dusk gets the same tools the entry used.
-// Pan speed lives in config.js (PHOTO).
+// Pan speed lives in config.js (PHOTO). v4 rewrote this file
+// wholesale — same behaviour, new structure.
 import { PHOTO } from './config.js';
 
 const CAPTION = 'PALMERA BAY — PHOTO MODE';

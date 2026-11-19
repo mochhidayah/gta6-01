@@ -10,6 +10,7 @@
 // races won, distance driven, stashes found, knockdowns, money
 // earned, or heat lost. The check runs once a second alongside the
 // achievements, and a finished challenge stays finished for the day.
+// v4 rewrote this file wholesale — same pool, same rewards, new order.
 import { seeded } from './rng.js';
 
 const POOL = [
