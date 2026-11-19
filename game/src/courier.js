@@ -1,10 +1,10 @@
 // Courier runs: timed parcel deliveries, a side activity for drivers.
 //
-// A courier job picks two of the city's landmarks — collect the parcel
+// A courier run picks two of the city's landmarks — collect the parcel
 // at one, drop it at the other before the clock runs out. Pay scales
 // with the distance, and the deadline is generous enough to drive
 // there, but not to sightsee on the way. The run is a small state
-// machine: pickup, then deliver, then done or expired. v4 rewrote
+// machine: pickup, then deliver, then done or expired. v5 rewrote
 // this file wholesale — same jobs, same payouts, new internal names.
 import { distSq } from './config.js';
 import { shuffle } from './rng.js';
@@ -15,10 +15,20 @@ const MAX_TIME = 150; // seconds, even for a trip across the city
 const FRAGILE_CHANCE = 0.35; // odds a parcel is marked fragile
 const FRAGILE_BONUS = 1.5; // fragile jobs pay half again
 
-// Pick two different landmarks and price the job from the distance
+// Turn a landmark key like 'policeHQ' into 'Police HQ' for the HUD.
+function displayName(key) {
+  const spaced = key.replace(/([A-Z])/g, ' $1');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
+}
+
+function atSpot(px, py, mark) {
+  return distSq(px, py, mark.x, mark.y) < MARKER_RADIUS * MARKER_RADIUS;
+}
+
+// Pick two different landmarks and price the run from the distance
 // between them. Returns {pickup, drop, pickupName, dropName, pay, timeLimit}.
-export function makeCourierJob(rng, landmarks) {
-  const names = shuffle(rng, Object.keys(landmarks));
+export function makeCourierJob(dice, landmarks) {
+  const names = shuffle(dice, Object.keys(landmarks));
   const pickupName = names[0];
   let dropName = names[1];
   if (dropName === pickupName) {
@@ -30,31 +40,21 @@ export function makeCourierJob(rng, landmarks) {
   const distance = Math.hypot(drop.x - pickup.x, drop.y - pickup.y);
   // About a third of the parcels are fragile: a hard crash smashes
   // them, but the client pays half again for the careful drive.
-  const fragile = rng() < FRAGILE_CHANCE;
+  const fragile = dice() < FRAGILE_CHANCE;
   const pay = Math.round((80 + Math.round(distance / 12)) * (fragile ? FRAGILE_BONUS : 1));
   const timeLimit = Math.max(MIN_TIME, Math.min(MAX_TIME, Math.round(distance / 14)));
   return { pickup, drop, pickupName, dropName, pay, timeLimit, fragile };
 }
 
-// Turn a landmark key like 'policeHQ' into 'Police HQ' for the HUD.
-function prettyName(key) {
-  const spaced = key.replace(/([A-Z])/g, ' $1');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1).trim();
-}
-
-function nearSpot(px, py, spot) {
-  return distSq(px, py, spot.x, spot.y) < MARKER_RADIUS * MARKER_RADIUS;
-}
-
 export class CourierRun {
-  constructor(job) {
-    this.pickup = job.pickup;
-    this.drop = job.drop;
-    this.pickupName = prettyName(job.pickupName);
-    this.dropName = prettyName(job.dropName);
-    this.pay = job.pay;
-    this.timeLimit = job.timeLimit;
-    this.fragile = !!job.fragile; // fragile: a hard crash smashes the parcel
+  constructor(run) {
+    this.pickup = run.pickup;
+    this.drop = run.drop;
+    this.pickupName = displayName(run.pickupName);
+    this.dropName = displayName(run.dropName);
+    this.pay = run.pay;
+    this.timeLimit = run.timeLimit;
+    this.fragile = !!run.fragile; // fragile: a hard crash smashes the parcel
     this.elapsed = 0;
     this.stage = 'pickup'; // pickup | deliver | done | expired
   }
@@ -96,13 +96,13 @@ export class CourierRun {
       return 'expired';
     }
     if (this.stage === 'pickup') {
-      if (nearSpot(px, py, this.pickup)) {
+      if (atSpot(px, py, this.pickup)) {
         this.stage = 'deliver';
         return 'picked';
       }
       return null;
     }
-    if (nearSpot(px, py, this.drop)) {
+    if (atSpot(px, py, this.drop)) {
       this.stage = 'done';
       return 'delivered';
     }

@@ -1,11 +1,12 @@
 // Every sound in Palmera Bay is synthesised live with WebAudio:
 // an engine hum, two-tone sirens, gunshots, pickups and three
 // little radio stations a step sequencer plays. No audio files,
-// no network — nothing to download. v4 rewrote this file wholesale
-// — same voices, same effects — with one change: the bank's own
-// radio sequencer no longer starts in ensure(), because radio.js
-// owns the music now (two sequencers at once sounded like a fight).
-const STATION_DEFS = [
+// no network — nothing to download. v5 rewrote this file wholesale
+// — same voices, same effects — with one rule carried over from v4:
+// the bank's own radio sequencer never starts in ensure(), because
+// radio.js owns the music now (two sequencers at once sounded like
+// a fight).
+const LEGACY_STATIONS = [
   { name: 'Sunset FM', scale: [110, 130.8, 164.8, 196, 220], bass: [0, 0, 2, 0, 3, 0, 4, 1] },
   { name: 'Radio Palma', scale: [98, 116.5, 146.8, 174.6, 196], bass: [0, 2, 0, 4, 0, 3, 1, 2] },
   { name: 'Night Drive', scale: [87.3, 103.8, 130.8, 155.6, 174.6], bass: [0, 0, 0, 2, 0, 0, 4, 3] },
@@ -23,7 +24,7 @@ class Voice {
     this.osc.start();
   }
 
-  // (Voices are retuned through osc/gain directly by the bank.)
+  // (Voices are retuned through oscillator/amp directly by the bank.)
 }
 
 export class SoundBank {
@@ -41,7 +42,7 @@ export class SoundBank {
     this.sirenTimer = null;
     this.musicTimer = null;
     this.musicStep = 0;
-    this.radioNames = STATION_DEFS.map((s) => s.name);
+    this.radioNames = LEGACY_STATIONS.map((s) => s.name);
   }
 
   // Create the audio graph on the first user gesture; browsers demand it.
@@ -56,16 +57,16 @@ export class SoundBank {
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.5;
     this.master.connect(this.ctx.destination);
-    this.renderNoise();
-    this.startEngineVoice();
+    this.bakeNoise();
+    this.startEngine();
     // No startRadio() here any more: radio.js owns the music.
   }
 
   // One second of white noise, rendered once and reused by every burst.
-  renderNoise() {
-    const c = this.ctx;
-    const len = c.sampleRate;
-    const buffer = c.createBuffer(1, len, c.sampleRate);
+  bakeNoise() {
+    const ac = this.ctx;
+    const len = ac.sampleRate;
+    const buffer = ac.createBuffer(1, len, ac.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     this.noiseBuf = buffer;
@@ -76,15 +77,60 @@ export class SoundBank {
     if (this.master) this.master.gain.value = muted ? 0 : 0.5;
   }
 
+  // --- one-shot helpers ---
+
+  // A short pitched tone that decays away.
+  tone(freq, dur, type = 'square', vol = 0.12) {
+    if (!this.ctx || this.muted) return;
+    const ac = this.ctx;
+    const now = ac.currentTime;
+    const oscillator = ac.createOscillator();
+    const amp = ac.createGain();
+    oscillator.type = type;
+    oscillator.frequency.value = freq;
+    amp.gain.setValueAtTime(vol, now);
+    amp.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    oscillator.connect(amp);
+    amp.connect(this.master);
+    oscillator.start(now);
+    oscillator.stop(now + dur);
+  }
+
+  // A slice of the shared noise buffer through a low-pass filter.
+  burst(dur, vol = 0.2, cutoff = 1200) {
+    if (!this.ctx || this.muted || !this.noiseBuf) return;
+    const ac = this.ctx;
+    const now = ac.currentTime;
+    const src = ac.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    const filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = cutoff;
+    const amp = ac.createGain();
+    amp.gain.setValueAtTime(vol, now);
+    amp.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(filter);
+    filter.connect(amp);
+    amp.connect(this.master);
+    src.start(now);
+    src.stop(now + dur);
+  }
+
+  // Play a little melody: notes spaced evenly in time.
+  arpeggio(freqs, stepMs, dur, type = 'triangle', vol = 0.18) {
+    freqs.forEach((f, i) => setTimeout(() => this.tone(f, dur, type, vol), i * stepMs));
+  }
+
   // --- continuous voices ---
 
-  startEngineVoice() {
-    const c = this.ctx;
-    const voice = new Voice(c, 'sawtooth', this.master);
-    const filter = c.createBiquadFilter();
+  startEngine() {
+    const ac = this.ctx;
+    const voice = new Voice(ac, 'sawtooth', this.master);
+    const filter = ac.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 320;
-    // Re-wire: oscillator -> filter -> gain -> master.
+    // Re-wire: oscillator -> filter -> amp -> master.
     voice.osc.disconnect();
     voice.osc.connect(filter);
     filter.connect(voice.gain);
@@ -95,73 +141,28 @@ export class SoundBank {
 
   setEngine(speed01, driving) {
     if (!this.engineOsc) return;
-    const t = this.ctx.currentTime;
-    this.engineOsc.frequency.setTargetAtTime(50 + speed01 * 130, t, 0.08);
-    this.engineGain.gain.setTargetAtTime(driving ? 0.05 + speed01 * 0.06 : 0.015, t, 0.1);
+    const now = this.ctx.currentTime;
+    this.engineOsc.frequency.setTargetAtTime(50 + speed01 * 130, now, 0.08);
+    this.engineGain.gain.setTargetAtTime(driving ? 0.05 + speed01 * 0.06 : 0.015, now, 0.1);
   }
 
-  startSirenVoice() {
+  startSiren() {
     if (this.sirenOsc || !this.ctx) return;
-    const c = this.ctx;
-    const voice = new Voice(c, 'triangle', this.master);
+    const ac = this.ctx;
+    const voice = new Voice(ac, 'triangle', this.master);
     this.sirenOsc = voice.osc;
     this.sirenGain = voice.gain;
     let high = false;
     this.sirenTimer = setInterval(() => {
       if (!this.sirenOsc) return;
       high = !high;
-      this.sirenOsc.frequency.setTargetAtTime(high ? 880 : 660, c.currentTime, 0.05);
+      this.sirenOsc.frequency.setTargetAtTime(high ? 880 : 660, ac.currentTime, 0.05);
     }, 450);
   }
 
   setSiren(on) {
-    if (on) this.startSirenVoice();
+    if (on) this.startSiren();
     if (this.sirenGain) this.sirenGain.gain.setTargetAtTime(on ? 0.045 : 0, this.ctx.currentTime, 0.2);
-  }
-
-  // --- one-shot helpers ---
-
-  // A short pitched tone that decays away.
-  tone(freq, dur, type = 'square', vol = 0.12) {
-    if (!this.ctx || this.muted) return;
-    const c = this.ctx;
-    const t = c.currentTime;
-    const osc = c.createOscillator();
-    const gain = c.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(gain);
-    gain.connect(this.master);
-    osc.start(t);
-    osc.stop(t + dur);
-  }
-
-  // A slice of the shared noise buffer through a low-pass filter.
-  burst(dur, vol = 0.2, cutoff = 1200) {
-    if (!this.ctx || this.muted || !this.noiseBuf) return;
-    const c = this.ctx;
-    const t = c.currentTime;
-    const src = c.createBufferSource();
-    src.buffer = this.noiseBuf;
-    src.loop = true;
-    const filter = c.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = cutoff;
-    const gain = c.createGain();
-    gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.master);
-    src.start(t);
-    src.stop(t + dur);
-  }
-
-  // Play a little melody: notes spaced evenly in time.
-  arpeggio(freqs, stepMs, dur, type = 'triangle', vol = 0.18) {
-    freqs.forEach((f, i) => setTimeout(() => this.tone(f, dur, type, vol), i * stepMs));
   }
 
   // --- game effects ---
@@ -259,7 +260,7 @@ export class SoundBank {
   // --- radio (legacy: radio.js owns the music in v4) ---
 
   nextStation() {
-    this.station = (this.station + 1) % STATION_DEFS.length;
+    this.station = (this.station + 1) % LEGACY_STATIONS.length;
     this.musicStep = 0;
     return this.radioNames[this.station];
   }
@@ -269,7 +270,7 @@ export class SoundBank {
   startRadio() {
     this.musicTimer = setInterval(() => {
       if (!this.ctx || this.muted || !this.radioOn) return;
-      const def = STATION_DEFS[this.station];
+      const def = LEGACY_STATIONS[this.station];
       const step = this.musicStep++;
       const bassNote = def.scale[def.bass[step % def.bass.length]];
       this.tone(bassNote, 0.32, 'triangle', 0.1);

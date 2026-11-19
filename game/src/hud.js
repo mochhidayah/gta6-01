@@ -2,7 +2,7 @@
 // objective tracker, speed, weapon, radio, clock, toasts, menus.
 // The tracker (top-left) shows mission title, step, timer. The heat
 // bar fills as the wanted level nears its next star; a helicopter
-// badge appears while the chopper watches. v4 rewrote this file
+// badge appears while the chopper watches. v5 rewrote this file
 // wholesale — same elements, same text, new internal names.
 const ELEMENT_IDS = [
   'hud', 'health-fill', 'health-num', 'money', 'stars', 'heat-fill', 'heat-wrap',
@@ -11,34 +11,34 @@ const ELEMENT_IDS = [
   'menu', 'menu-title', 'menu-body', 'menu-hint', 'minimap', 'fps', 'race-status',
 ];
 
-function healthColor(hp) {
+function hpColor(hp) {
   if (hp > 50) return '#58d068';
   if (hp > 25) return '#f2c230';
   return '#e33f2f';
 }
 
-function moneyText(amount) {
+function cashText(amount) {
   return `$${amount.toLocaleString('en-US')}`;
 }
 
-function starsText(wanted) {
+function starRow(wanted) {
   return '★'.repeat(wanted) + '☆'.repeat(5 - wanted);
 }
 
-function clockText(clockSeconds) {
+function clockLabel(clockSeconds) {
   const totalMins = Math.floor(clockSeconds / 60);
   const hour = (17 + Math.floor(totalMins / 60)) % 24;
   const minute = String(totalMins % 60).padStart(2, '0');
   return `${String(hour).padStart(2, '0')}:${minute}`;
 }
 
-function speedText(game) {
+function speedLabel(game) {
   const p = game.player;
   if (p.inCar && game.playerCar) return `${Math.round(Math.abs(game.playerCar.speed) * 0.22)} km/h`;
   return p.sprint ? 'Sprinting' : 'On foot';
 }
 
-function weaponText(game) {
+function weaponLabel(game) {
   const p = game.player;
   if (p.inCar) return game.playerCar.model.name;
   if (p.weapon === 'pistol') return `Pistol · ${p.ammo} rounds`;
@@ -56,14 +56,32 @@ export class HUD {
     this.el.hud.style.display = on ? 'block' : 'none';
   }
 
+  toast(title, body, seconds = 4) {
+    this.el['toast-title'].textContent = title;
+    this.el['toast-body'].textContent = body;
+    this.el.toast.classList.add('show');
+    this.toastTimer = seconds;
+  }
+
+  showMenu(title, body, hint) {
+    this.el['menu-title'].textContent = title;
+    this.el['menu-body'].innerHTML = body;
+    this.el['menu-hint'].textContent = hint;
+    this.el.menu.style.display = 'flex';
+  }
+
+  hideMenu() {
+    this.el.menu.style.display = 'none';
+  }
+
   update(game, dt) {
     const p = game.player;
     const bar = this.el['health-fill'];
     bar.style.width = `${p.health}%`;
-    bar.style.background = healthColor(p.health);
+    bar.style.background = hpColor(p.health);
     this.el['health-num'].textContent = `${Math.ceil(p.health)} HP`;
-    this.el.money.textContent = moneyText(p.money);
-    this.el.stars.textContent = starsText(game.wanted);
+    this.el.money.textContent = cashText(p.money);
+    this.el.stars.textContent = starRow(game.wanted);
     this.el.stars.style.color = game.wanted > 0 ? '#ffd23f' : '#ffffff88';
     const heat = game.police ? game.police.heatFrac() : 0;
     this.el['heat-fill'].style.width = `${Math.round(heat * 100)}%`;
@@ -71,14 +89,14 @@ export class HUD {
     const watched = !!(game.police && game.police.watched);
     this.el['heli-alert'].style.display = watched ? 'block' : 'none';
     if (watched) this.el['heli-alert'].textContent = '🚁 HELICOPTER WATCHING — break line of sight!';
-    this.paintTracker(game);
-    this.el.speed.textContent = speedText(game);
-    this.el.weapon.textContent = weaponText(game);
+    this.drawTracker(game);
+    this.el.speed.textContent = speedLabel(game);
+    this.el.weapon.textContent = weaponLabel(game);
     this.el.radio.textContent = game.sounds.radioOn
       ? `♪ ${game.sounds.radioNames[game.sounds.station]}`
       : '♪ Radio off';
-    this.el.clock.textContent = clockText(game.clock);
-    this.paintRaceStatus(game);
+    this.el.clock.textContent = clockLabel(game.clock);
+    this.drawRaceChip(game);
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('show');
@@ -87,7 +105,7 @@ export class HUD {
 
   // Race status chip (top centre): countdown, checkpoint, or the
   // armed prompt. Hidden when no race is anywhere near starting.
-  paintRaceStatus(game) {
+  drawRaceChip(game) {
     const el = this.el['race-status'];
     if (!el) return;
     const race = game.races;
@@ -114,13 +132,13 @@ export class HUD {
   }
 
   // Tracker: mission title, step, timer; taxi / courier / free-roam when idle.
-  paintTracker(game) {
+  drawTracker(game) {
     const m = game.missions;
     const step = m.currentStep();
     if (step) {
       this.el['objective-title'].textContent = `◆ ${m.active.def.title}  ($${m.active.def.pay})`;
       this.el['objective-step'].textContent = step.text;
-      this.el['objective-timer'].textContent = this.timerText(game, step);
+      this.el['objective-timer'].textContent = this.stepTimerText(game, step);
       return;
     }
     if (game.races && game.races.racing) {
@@ -164,7 +182,7 @@ export class HUD {
       : '';
   }
 
-  timerText(game, step) {
+  stepTimerText(game, step) {
     if (step.timer) {
       const left = Math.max(0, step.timer - game.missions.active.timer);
       return `${Math.ceil(left)}s left`;
@@ -178,23 +196,5 @@ export class HUD {
       return `${Math.max(0, crew - base)} / ${step.count} down`;
     }
     return '';
-  }
-
-  toast(title, body, seconds = 4) {
-    this.el['toast-title'].textContent = title;
-    this.el['toast-body'].textContent = body;
-    this.el.toast.classList.add('show');
-    this.toastTimer = seconds;
-  }
-
-  showMenu(title, body, hint) {
-    this.el['menu-title'].textContent = title;
-    this.el['menu-body'].innerHTML = body;
-    this.el['menu-hint'].textContent = hint;
-    this.el.menu.style.display = 'flex';
-  }
-
-  hideMenu() {
-    this.el.menu.style.display = 'none';
   }
 }

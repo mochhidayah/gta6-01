@@ -1,347 +1,147 @@
 // Missions: Marco's thirteen-job story, plus taxi fares, courier runs
-// and hidden cash stashes. A mission is a list of steps; every step type
-// has one handler, and the manager advances, fails or completes the
-// mission as the steps resolve. v4 rewrote this file wholesale — new
-// internal names and structure — while keeping every step, payout,
-// timer and radius exactly as the story was written, and added one
-// thing: a cutscene briefing plays when a job starts (never while a
-// screenshot is being staged).
+// and hidden cash stashes. A mission is a list of steps; every stage
+// type has one handler, and the manager advances, fails or completes
+// the mission as the steps resolve. v5 rewrote this file wholesale —
+// new internal names, new layout — while keeping every stage, payout,
+// timer and radius exactly as the story was written. One thing stays
+// from v4: a cutscene briefing plays when a job starts, never while a
+// screenshot is being staged.
 import { distSq } from './config.js';
 import { CourierRun, makeCourierJob } from './courier.js';
 
+// The story, in order. Every stage's type, place, timer, radius, hold,
+// stars, crew, count and model are load-bearing — the handlers below
+// read them exactly as written.
 export const STORY = [
   {
-    id: 'm1',
-    title: 'First Wheels',
-    pay: 300,
-    brief: 'Marco needs wheels. Lift any car off the street and bring it to Solano Garage.',
+    id: 'm1', title: 'First Wheels', pay: 300,
+    brief: 'Marco is back with empty pockets and a car-shaped hole in his plans. Lift any car off the street and bring it to Solano Garage.',
     steps: [
-      {
-        type: 'stealCar',
-        text: 'Steal a car (walk up to one and press E)',
-      },
-      {
-        type: 'goto',
-        place: 'garage',
-        text: 'Drive it to Solano Garage',
-        radius: 90,
-      },
+      { type: 'stealCar', text: 'Steal a car — walk up to one and press E' },
+      { type: 'goto', place: 'garage', radius: 90, text: 'Take it to Solano Garage' },
     ],
   },
   {
-    id: 'm2',
-    title: 'The Pickup',
-    pay: 450,
-    brief: 'Lucia is waiting down at Coral Marina. Fetch her and get her to Club Flamingo before the doors fill up.',
+    id: 'm2', title: 'The Pickup', pay: 450,
+    brief: 'Lucia is waiting down at Coral Marina. Go and get her, then drive her to Club Flamingo before the doors fill up.',
     steps: [
-      {
-        type: 'goto',
-        place: 'marina',
-        text: 'Pick up Lucia at Coral Marina',
-        radius: 80,
-      },
-      {
-        type: 'goto',
-        place: 'club',
-        text: 'Drive Lucia to Club Flamingo',
-        radius: 90,
-        timer: 75,
-      },
+      { type: 'goto', place: 'marina', radius: 80, text: 'Fetch Lucia at Coral Marina' },
+      { type: 'goto', place: 'club', radius: 90, timer: 75, text: 'Drive Lucia to Club Flamingo' },
     ],
   },
   {
-    id: 'm3',
-    title: 'Hot Pursuit',
-    pay: 500,
-    brief: 'The precinct has Marco in its sights. Stir up a 3-star wanted level — then vanish.',
+    id: 'm3', title: 'Hot Pursuit', pay: 500,
+    brief: 'The precinct has its eye on Marco. Stir up a 3-star wanted level — then disappear.',
     steps: [
-      {
-        type: 'wanted',
-        stars: 3,
-        text: 'Raise your wanted level to 3 stars (cause chaos!)',
-      },
-      {
-        type: 'loseCops',
-        text: 'Lose the cops — stay out of sight until the heat dies down',
-      },
+      { type: 'wanted', stars: 3, text: 'Raise your wanted level to 3 stars (make some noise!)' },
+      { type: 'loseCops', text: 'Shake the cops — stay hidden until the heat dies down' },
     ],
   },
   {
-    id: 'm4',
-    title: 'The Drop',
-    pay: 650,
-    brief: 'A package for the Golden Palm Pawn, and the clock is running. Deliver it in one piece.',
+    id: 'm4', title: 'The Drop', pay: 650,
+    brief: 'A package for the Golden Palm Pawn, and the clock is ticking. Deliver it in one piece.',
     steps: [
-      {
-        type: 'goto',
-        place: 'pawnshop',
-        text: 'Deliver the package to Golden Palm Pawn',
-        radius: 85,
-        timer: 90,
-      },
+      { type: 'goto', place: 'pawnshop', radius: 85, timer: 90, text: 'Take the package to Golden Palm Pawn' },
     ],
   },
   {
-    id: 'm5',
-    title: 'Bank Job',
-    pay: 1200,
-    brief: 'Palmera Reserve Bank, midday. Grab the cash, then outrun a 4-star response.',
+    id: 'm5', title: 'Bank Job', pay: 1200,
+    brief: 'Palmera Reserve Bank, midday. Grab the cash, then outrun the whole precinct.',
     steps: [
-      {
-        type: 'goto',
-        place: 'bank',
-        text: 'Reach Palmera Reserve Bank',
-        radius: 85,
-      },
-      {
-        type: 'rob',
-        place: 'bank',
-        text: 'Hold up the bank — stay inside the marker 6 seconds',
-        hold: 6,
-      },
-      {
-        type: 'escape',
-        stars: 4,
-        text: 'Escape! Lose the 4-star wanted level',
-        radius: 0,
-      },
+      { type: 'goto', place: 'bank', radius: 85, text: 'Get to Palmera Reserve Bank' },
+      { type: 'rob', place: 'bank', hold: 6, text: 'Hold up the bank — stay inside the marker 6 seconds' },
+      { type: 'escape', stars: 4, radius: 0, text: 'Escape! Lose the 4-star wanted level' },
     ],
   },
   {
-    id: 'm6',
-    title: 'The Big Score',
-    pay: 2500,
+    id: 'm6', title: 'The Big Score', pay: 2500,
     brief: 'One last job: lift the armored van parked at Bay Sharks Stadium and run it to the South Docks. Then Marco walks free.',
     steps: [
-      {
-        type: 'goto',
-        place: 'stadium',
-        text: 'Reach Bay Sharks Stadium',
-        radius: 95,
-      },
-      {
-        type: 'stealVan',
-        text: 'Steal the armored van',
-      },
-      {
-        type: 'goto',
-        place: 'docks',
-        text: 'Deliver the van to the South Docks',
-        radius: 100,
-        timer: 120,
-      },
+      { type: 'goto', place: 'stadium', radius: 95, text: 'Get to Bay Sharks Stadium' },
+      { type: 'stealVan', text: 'Steal the armored van' },
+      { type: 'goto', place: 'docks', radius: 100, timer: 120, text: 'Run the van to the South Docks' },
     ],
   },
   {
-    id: 'm7',
-    title: 'The Getaway',
-    pay: 1800,
+    id: 'm7', title: 'The Getaway', pay: 1800,
     brief: 'The crew needs a fast car and a clean exit. Steal a Falcon GT — the fastest thing on the streets — and run it to Palmera Airfield before the precinct locks the city down.',
     steps: [
-      {
-        type: 'stealModel',
-        model: 'Falcon GT',
-        text: 'Steal a Falcon GT (the red one — fastest in town)',
-      },
-      {
-        type: 'goto',
-        place: 'airport',
-        text: 'Run it to Palmera Airfield',
-        radius: 95,
-        timer: 100,
-      },
-      {
-        type: 'escape',
-        stars: 3,
-        text: 'Escape! Lose the 3-star wanted level',
-        radius: 0,
-      },
+      { type: 'stealModel', model: 'Falcon GT', text: 'Steal a Falcon GT (the red one — fastest in town)' },
+      { type: 'goto', place: 'airport', radius: 95, timer: 100, text: 'Run it to Palmera Airfield' },
+      { type: 'escape', stars: 3, radius: 0, text: 'Escape! Lose the 3-star wanted level' },
     ],
   },
   {
-    id: 'm8',
-    title: 'Night Shift',
-    pay: 950,
+    id: 'm8', title: 'Night Shift', pay: 950,
     brief: 'Four pickups, one night, no excuses. Lucia runs a courier ring after dark and Marco is the wheelman — marina, airfield, docks, club, against the clock.',
     steps: [
-      {
-        type: 'goto',
-        place: 'marina',
-        text: 'Stop 1 of 4: collect at Coral Marina',
-        radius: 80,
-        timer: 60,
-      },
-      {
-        type: 'goto',
-        place: 'airport',
-        text: 'Stop 2 of 4: drop at Palmera Airfield',
-        radius: 85,
-        timer: 60,
-      },
-      {
-        type: 'goto',
-        place: 'docks',
-        text: 'Stop 3 of 4: collect at the South Docks',
-        radius: 85,
-        timer: 60,
-      },
-      {
-        type: 'goto',
-        place: 'club',
-        text: 'Stop 4 of 4: final drop at Club Flamingo',
-        radius: 90,
-        timer: 60,
-      },
+      { type: 'goto', place: 'marina', radius: 80, timer: 60, text: 'Stop 1 of 4: pickup at Coral Marina' },
+      { type: 'goto', place: 'airport', radius: 85, timer: 60, text: 'Stop 2 of 4: delivery at Palmera Airfield' },
+      { type: 'goto', place: 'docks', radius: 85, timer: 60, text: 'Stop 3 of 4: pickup at the South Docks' },
+      { type: 'goto', place: 'club', radius: 90, timer: 60, text: 'Stop 4 of 4: final delivery at Club Flamingo' },
     ],
   },
   {
-    id: 'm9',
-    title: 'Turf War',
-    pay: 1600,
+    id: 'm9', title: 'Turf War', pay: 1600,
     brief: 'The Sharks jumped a Viper runner on stadium turf. The Vipers want payback and Marco owes them — put six Sharks on the ground, then get out before the precinct arrives.',
     steps: [
-      {
-        type: 'goto',
-        place: 'stadium',
-        text: 'Get to Bay Sharks Stadium — the fight is on',
-        radius: 95,
-      },
-      {
-        type: 'defeat',
-        crew: 'Sharks',
-        count: 6,
-        text: 'Drop 6 Sharks (fists or pistol — your call)',
-      },
-      {
-        type: 'escape',
-        stars: 3,
-        text: 'Escape! Lose the 3-star wanted level',
-        radius: 0,
-      },
+      { type: 'goto', place: 'stadium', radius: 95, text: 'Get to Bay Sharks Stadium — the fight is waiting' },
+      { type: 'defeat', crew: 'Sharks', count: 6, text: 'Drop 6 Sharks (fists or pistol — your call)' },
+      { type: 'escape', stars: 3, radius: 0, text: 'Escape! Lose the 3-star wanted level' },
     ],
   },
   {
-    id: 'm10',
-    title: 'The Last Debt',
-    pay: 3500,
+    id: 'm10', title: 'The Last Debt', pay: 3500,
     brief: 'The finale. The man Marco owes keeps his ledger in the docks warehouse. Lift a Midnight Van, pick up the crew at the marina, crack the warehouse hold, and walk out of a 4-star storm with the ledger.',
     steps: [
-      {
-        type: 'stealModel',
-        model: 'Midnight Van',
-        text: 'Steal a Midnight Van for the crew',
-      },
-      {
-        type: 'goto',
-        place: 'marina',
-        text: 'Pick up the crew at Coral Marina',
-        radius: 85,
-      },
-      {
-        type: 'rob',
-        place: 'docks',
-        text: 'Crack the warehouse hold — stay inside the marker 8 seconds',
-        hold: 8,
-      },
-      {
-        type: 'escape',
-        stars: 4,
-        text: 'Escape! Lose the 4-star wanted level',
-        radius: 0,
-      },
+      { type: 'stealModel', model: 'Midnight Van', text: 'Steal a Midnight Van for the crew' },
+      { type: 'goto', place: 'marina', radius: 85, text: 'Collect the crew at Coral Marina' },
+      { type: 'rob', place: 'docks', hold: 8, text: 'Crack the warehouse hold — stay inside the marker 8 seconds' },
+      { type: 'escape', stars: 4, radius: 0, text: 'Escape! Lose the 4-star wanted level' },
     ],
   },
   {
-    id: 'm11',
-    title: 'Street King',
-    pay: 2000,
+    id: 'm11', title: 'Street King', pay: 2000,
     brief: 'The stadium crowd runs an illegal street race after dark. Line up at the start pad by the stadium, beat three rivals across the city — airfield, marina, docks, club — and take the crown.',
     steps: [
-      {
-        type: 'goto',
-        place: 'stadium',
-        text: 'Get to Bay Sharks Stadium — the race starts there',
-        radius: 120,
-      },
-      {
-        type: 'race',
-        text: 'Win the street race — press T on the start pad',
-      },
-      {
-        type: 'escape',
-        stars: 2,
-        text: 'Escape! Lose the 2-star wanted level',
-        radius: 0,
-      },
+      { type: 'goto', place: 'stadium', radius: 120, text: 'Get to Bay Sharks Stadium — the race begins there' },
+      { type: 'race', text: 'Win the street race — press T on the start pad' },
+      { type: 'escape', stars: 2, radius: 0, text: 'Escape! Lose the 2-star wanted level' },
     ],
   },
   {
-    id: 'm12',
-    title: 'Payback',
-    pay: 2200,
+    id: 'm12', title: 'Payback', pay: 2200,
     brief: 'The Vipers torched a Solano garage truck and laughed about it. Six of them are hanging around the South Docks — put them down, then disappear before the precinct arrives.',
     steps: [
-      {
-        type: 'goto',
-        place: 'docks',
-        text: 'Get to the South Docks — the Vipers are waiting',
-        radius: 100,
-      },
-      {
-        type: 'defeat',
-        crew: 'Vipers',
-        count: 6,
-        text: 'Drop 6 Vipers (fists or pistol — your call)',
-      },
-      {
-        type: 'escape',
-        stars: 3,
-        text: 'Escape! Lose the 3-star wanted level',
-        radius: 0,
-      },
+      { type: 'goto', place: 'docks', radius: 100, text: 'Get to the South Docks — the Vipers are hanging around' },
+      { type: 'defeat', crew: 'Vipers', count: 6, text: 'Drop 6 Vipers (fists or pistol — your call)' },
+      { type: 'escape', stars: 3, radius: 0, text: 'Escape! Lose the 3-star wanted level' },
     ],
   },
   {
-    id: 'm13',
-    title: 'Clean Slate',
-    pay: 2800,
+    id: 'm13', title: 'Clean Slate', pay: 2800,
     brief: 'One last favour for Lucia, then the debt is paid and Marco is free: lift a Coral Coupe from uptown, run it to Palmera Airfield, and lose the tail on the way.',
     steps: [
-      {
-        type: 'stealModel',
-        model: 'Coral Coupe',
-        text: 'Steal a Coral Coupe (the pink one — hard to miss)',
-      },
-      {
-        type: 'goto',
-        place: 'airport',
-        text: 'Run it to Palmera Airfield',
-        radius: 95,
-        timer: 100,
-      },
-      {
-        type: 'escape',
-        stars: 2,
-        text: 'Escape! Lose the 2-star wanted level',
-        radius: 0,
-      },
+      { type: 'stealModel', model: 'Coral Coupe', text: 'Steal a Coral Coupe (the pink one — hard to miss)' },
+      { type: 'goto', place: 'airport', radius: 95, timer: 100, text: 'Run it to Palmera Airfield' },
+      { type: 'escape', stars: 2, radius: 0, text: 'Escape! Lose the 2-star wanted level' },
     ],
   },
 ];
 
 // Where Marco is right now — the car when driving, his feet when not.
-function playerPos(game) {
+function whereIsMarco(game) {
   const p = game.player;
   if (p.inCar && game.playerCar) return { x: game.playerCar.x, y: game.playerCar.y };
   return { x: p.x, y: p.y };
 }
 
-function insideRadius(x, y, target, radius) {
+function within(x, y, target, radius) {
   return distSq(x, y, target.x, target.y) < radius * radius;
 }
 
 // How many of a named crew are down on the ground right now.
-function crewDown(game, crewName) {
+function crewDownCount(game, crewName) {
   let n = 0;
   for (const m of game.gangs.members) {
     if (m.crew.name === crewName && m.state === 'down') n += 1;
@@ -374,39 +174,14 @@ export class MissionManager {
     return STORY.length;
   }
 
+  // -- story lifecycle --------------------------------------------------------
+
   startStory() {
     if (this.storyDone) return false;
-    const def = STORY[this.storyIndex];
-    this.active = { def, step: 0, timer: 0, holdT: 0, defeatBase: 0 };
-    if (def.id === 'm6' && !this.vanParked) {
-      const spot = this.game.city.landmarks.stadium;
-      this.game.traffic.spawnVan(spot.x + 60, spot.y + 30);
-      this.vanParked = true;
-    }
-    if (def.id === 'm9' && !this.sharksMustered) {
-      const spot = this.game.city.landmarks.stadium;
-      this.game.gangs.spawnCrew('Sharks', 6, spot.x, spot.y);
-      this.sharksMustered = true;
-    }
-    if (def.id === 'm10') {
-      const spot = this.game.city.landmarks.garage;
-      this.game.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
-    }
-    if (def.id === 'm11') {
-      // A fresh race: the win flag from any earlier race does not count.
-      this.game.races.won = false;
-    }
-    if (def.id === 'm12' && !this.vipersMustered) {
-      const spot = this.game.city.landmarks.docks;
-      this.game.gangs.spawnCrew('Vipers', 6, spot.x, spot.y);
-      this.vipersMustered = true;
-    }
-    if (def.id === 'm13' && !this.coupeParked) {
-      const spot = this.game.city.landmarks.policeHQ;
-      this.game.traffic.spawnModel('Coral Coupe', spot.x - 80, spot.y + 40);
-      this.coupeParked = true;
-    }
-    this.announce(def);
+    const job = STORY[this.storyIndex];
+    this.active = { def: job, step: 0, timer: 0, holdT: 0, defeatBase: 0 };
+    this._stageMissionProps(job);
+    this.announce(job);
     // A scripted briefing opens over the game — never while a screenshot
     // is being staged (?shot=), or the letterbox would spoil the shot.
     const staging = new URLSearchParams(window.location.search).get('shot');
@@ -416,10 +191,43 @@ export class MissionManager {
     return true;
   }
 
-  announce(def) {
-    const g = this.game;
-    g.toast(`MISSION: ${def.title}`, def.brief, 6);
-    g.sounds.pickup();
+  // Park the mission's special vehicles and crews before the first stage.
+  _stageMissionProps(job) {
+    const gm = this.game;
+    if (job.id === 'm6' && !this.vanParked) {
+      const spot = gm.city.landmarks.stadium;
+      gm.traffic.spawnVan(spot.x + 60, spot.y + 30);
+      this.vanParked = true;
+    }
+    if (job.id === 'm9' && !this.sharksMustered) {
+      const spot = gm.city.landmarks.stadium;
+      gm.gangs.spawnCrew('Sharks', 6, spot.x, spot.y);
+      this.sharksMustered = true;
+    }
+    if (job.id === 'm10') {
+      const spot = gm.city.landmarks.garage;
+      gm.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
+    }
+    if (job.id === 'm11') {
+      // A fresh race: the win flag from any earlier race does not count.
+      gm.races.won = false;
+    }
+    if (job.id === 'm12' && !this.vipersMustered) {
+      const spot = gm.city.landmarks.docks;
+      gm.gangs.spawnCrew('Vipers', 6, spot.x, spot.y);
+      this.vipersMustered = true;
+    }
+    if (job.id === 'm13' && !this.coupeParked) {
+      const spot = gm.city.landmarks.policeHQ;
+      gm.traffic.spawnModel('Coral Coupe', spot.x - 80, spot.y + 40);
+      this.coupeParked = true;
+    }
+  }
+
+  announce(job) {
+    const gm = this.game;
+    gm.toast(`MISSION: ${job.title}`, job.brief, 6);
+    gm.sounds.pickup();
   }
 
   currentStep() {
@@ -428,39 +236,39 @@ export class MissionManager {
   }
 
   currentTarget() {
-    const step = this.currentStep();
-    if (!step || !step.place) return null;
-    return this.game.city.landmarks[step.place];
+    const stage = this.currentStep();
+    if (!stage || !stage.place) return null;
+    return this.game.city.landmarks[stage.place];
   }
 
   fail(reason) {
-    const g = this.game;
-    g.toast('MISSION FAILED', reason, 5);
-    g.sounds.missionFail();
+    const gm = this.game;
+    gm.toast('MISSION FAILED', reason, 5);
+    gm.sounds.missionFail();
     this.active = null;
   }
 
   complete() {
-    const g = this.game;
-    const def = this.active.def;
-    g.player.money += def.pay;
-    if (g.stats) {
-      g.stats.recordEarned(def.pay);
-      g.stats.recordJob();
+    const gm = this.game;
+    const job = this.active.def;
+    gm.player.money += job.pay;
+    if (gm.stats) {
+      gm.stats.recordEarned(job.pay);
+      gm.stats.recordJob();
     }
-    g.sounds.missionDone();
-    g.sounds.cash();
-    g.toast('MISSION COMPLETE', `${def.title} — earned $${def.pay}`, 6);
+    gm.sounds.missionDone();
+    gm.sounds.cash();
+    gm.toast('MISSION COMPLETE', `${job.title} — earned $${job.pay}`, 6);
     this.completed += 1;
     this.storyIndex += 1;
     this.active = null;
     if (this.storyDone) {
-      g.toast(
+      gm.toast(
         'PALMERA BAY IS YOURS',
         'Every job done. Marco Solano runs this city now — free roam, fares and stashes remain.',
         9,
       );
-      g.saveGame();
+      gm.saveGame();
     }
   }
 
@@ -472,27 +280,27 @@ export class MissionManager {
       this.complete();
       return;
     }
-    const step = this.currentStep();
-    if (step.type === 'defeat') {
-      this.active.defeatBase = crewDown(this.game, step.crew);
+    const stage = this.currentStep();
+    if (stage.type === 'defeat') {
+      this.active.defeatBase = crewDownCount(this.game, stage.crew);
     }
-    this.game.toast('NEW OBJECTIVE', step.text, 5);
+    this.game.toast('NEW OBJECTIVE', stage.text, 5);
   }
 
-  // One frame of the active story step; the timer runs for steps that carry one.
+  // One frame of the active story stage; the timer runs for steps that carry one.
   update(dt) {
     if (!this.active) return;
-    const step = this.currentStep();
-    if (!step) return;
-    if (step.timer) {
+    const stage = this.currentStep();
+    if (!stage) return;
+    if (stage.timer) {
       this.active.timer += dt;
-      if (this.active.timer > step.timer) {
+      if (this.active.timer > stage.timer) {
         this.fail('Out of time — the window closed.');
         return;
       }
     }
-    const handler = this.stepHandlers[step.type];
-    if (handler) handler.call(this, dt, step);
+    const handler = this.stepHandlers[stage.type];
+    if (handler) handler.call(this, dt, stage);
   }
 
   get stepHandlers() {
@@ -510,11 +318,13 @@ export class MissionManager {
     };
   }
 
-  onGoto(dt, step) {
-    const g = this.game;
-    const pos = playerPos(g);
-    const target = g.city.landmarks[step.place];
-    if (insideRadius(pos.x, pos.y, target, step.radius)) this.nextStep();
+  // -- stage handlers ----------------------------------------------------------
+
+  onGoto(dt, stage) {
+    const gm = this.game;
+    const pos = whereIsMarco(gm);
+    const target = gm.city.landmarks[stage.place];
+    if (within(pos.x, pos.y, target, stage.radius)) this.nextStep();
   }
 
   onStealCar() {
@@ -522,125 +332,125 @@ export class MissionManager {
   }
 
   onStealVan() {
-    const g = this.game;
-    if (g.player.inCar && g.playerCar && g.playerCar.van) this.nextStep();
+    const gm = this.game;
+    if (gm.player.inCar && gm.playerCar && gm.playerCar.van) this.nextStep();
   }
 
-  onStealModel(dt, step) {
-    const g = this.game;
-    if (g.player.inCar && g.playerCar && g.playerCar.model.name === step.model) this.nextStep();
+  onStealModel(dt, stage) {
+    const gm = this.game;
+    if (gm.player.inCar && gm.playerCar && gm.playerCar.model.name === stage.model) this.nextStep();
   }
 
-  onWanted(dt, step) {
-    if (this.game.wanted >= step.stars) this.nextStep();
+  onWanted(dt, stage) {
+    if (this.game.wanted >= stage.stars) this.nextStep();
   }
 
   onLoseCops() {
-    const g = this.game;
-    if (g.wanted === 0 && g.cops.length === 0 && g.police.policeCars() === 0) this.nextStep();
+    const gm = this.game;
+    if (gm.wanted === 0 && gm.cops.length === 0 && gm.police.policeCars() === 0) this.nextStep();
   }
 
   // Hold inside a ring to crack a target (bank, or the docks warehouse).
-  onRob(dt, step) {
-    const g = this.game;
-    const pos = playerPos(g);
-    const site = g.city.landmarks[step.place || 'bank'];
-    if (!insideRadius(pos.x, pos.y, site, 100)) {
+  onRob(dt, stage) {
+    const gm = this.game;
+    const pos = whereIsMarco(gm);
+    const site = gm.city.landmarks[stage.place || 'bank'];
+    if (!within(pos.x, pos.y, site, 100)) {
       this.active.holdT = 0;
       return;
     }
     this.active.holdT += dt;
-    if (this.active.holdT < step.hold) return;
-    const take = step.place === 'docks' ? 1500 : 800;
-    g.player.money += take;
-    g.police.addCrime(
+    if (this.active.holdT < stage.hold) return;
+    const take = stage.place === 'docks' ? 1500 : 800;
+    gm.player.money += take;
+    gm.police.addCrime(
       3,
-      step.place === 'docks'
+      stage.place === 'docks'
         ? 'Warehouse cracked! $1,500 grabbed — the whole precinct is coming.'
         : 'Bank robbed! $800 grabbed — the whole precinct is coming.',
     );
-    g.sounds.cash();
+    gm.sounds.cash();
     this.nextStep();
   }
 
-  onEscape(dt, step) {
-    const g = this.game;
-    g.police.setWanted(Math.max(g.wanted, step.stars));
-    if (g.wanted === 0 && g.cops.length === 0 && g.police.policeCars() === 0) this.nextStep();
+  onEscape(dt, stage) {
+    const gm = this.game;
+    gm.police.setWanted(Math.max(gm.wanted, stage.stars));
+    if (gm.wanted === 0 && gm.cops.length === 0 && gm.police.policeCars() === 0) this.nextStep();
   }
 
-  // Count how many of the named crew are down since this step began.
-  onDefeat(dt, step) {
-    const g = this.game;
-    const dropped = crewDown(g, step.crew) - this.active.defeatBase;
-    if (dropped >= step.count) {
-      g.toast('TURF TAKEN', `The ${step.crew} are down — now get out of there.`, 4);
+  // Count how many of the named crew are down since this stage began.
+  onDefeat(dt, stage) {
+    const gm = this.game;
+    const dropped = crewDownCount(gm, stage.crew) - this.active.defeatBase;
+    if (dropped >= stage.count) {
+      gm.toast('TURF TAKEN', `The ${stage.crew} are down — now get out of there.`, 4);
       this.nextStep();
     }
   }
 
-  // The street-race step (m11): done the moment a race is won.
-  // The race itself lives in races.js; this step just watches the flag.
+  // The street-race stage (m11): done the moment a race is won.
+  // The race itself lives in races.js; this stage just watches the flag.
   onRace() {
-    const g = this.game;
-    if (g.races && g.races.wonRace) {
-      g.toast('STREET KING', 'You beat the stadium field — the crown is yours.', 4);
+    const gm = this.game;
+    if (gm.races && gm.races.wonRace) {
+      gm.toast('STREET KING', 'You beat the stadium field — the crown is yours.', 4);
       this.nextStep();
     }
   }
 
-  // --- Taxi fares (side activity) ---
+  // -- taxi fares (side activity) ---------------------------------------------
 
   offerTaxi() {
-    const g = this.game;
+    const gm = this.game;
     if (this.taxi || this.active) return false;
-    if (!g.playerCar || !g.playerCar.taxi) return false;
-    const spots = Object.values(g.city.landmarks);
+    if (!gm.playerCar || !gm.playerCar.taxi) return false;
+    const spots = Object.values(gm.city.landmarks);
     const from = spots[Math.floor(Math.random() * spots.length)];
     let to = spots[Math.floor(Math.random() * spots.length)];
     if (to === from) to = spots[(spots.indexOf(from) + 3) % spots.length];
     const pay = 60 + Math.floor(Math.random() * 60);
     this.taxi = { pickup: from, drop: to, stage: 'pickup', pay, timer: 0 };
-    g.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${pay}.`, 5);
+    gm.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${pay}.`, 5);
     return true;
   }
 
   updateTaxi(dt) {
-    const g = this.game;
-    if (!this.taxi || !g.playerCar) return;
-    const car = g.playerCar;
+    const gm = this.game;
+    if (!this.taxi || !gm.playerCar) return;
+    const car = gm.playerCar;
     this.taxi.timer += dt;
     if (this.taxi.stage === 'pickup') {
-      if (insideRadius(car.x, car.y, this.taxi.pickup, 80)) {
+      if (within(car.x, car.y, this.taxi.pickup, 80)) {
         this.taxi.stage = 'drop';
-        g.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
-        g.sounds.pickup();
+        gm.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
+        gm.sounds.pickup();
       }
-    } else if (insideRadius(car.x, car.y, this.taxi.drop, 80)) {
-      g.player.money += this.taxi.pay;
-      if (g.stats) {
-        g.stats.recordEarned(this.taxi.pay);
-        g.stats.recordFare();
+    } else if (within(car.x, car.y, this.taxi.drop, 80)) {
+      gm.player.money += this.taxi.pay;
+      if (gm.stats) {
+        gm.stats.recordEarned(this.taxi.pay);
+        gm.stats.recordFare();
       }
-      g.sounds.cash();
-      g.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
+      gm.sounds.cash();
+      gm.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
       this.taxi = null;
     }
     if (this.taxi && this.taxi.timer > 120) {
       this.taxi = null;
-      g.toast('FARE LOST', 'The passenger gave up waiting.', 4);
+      gm.toast('FARE LOST', 'The passenger gave up waiting.', 4);
     }
   }
 
-  // --- Courier runs (side activity) ---
+  // -- courier runs (side activity) -------------------------------------------
 
   offerCourier() {
-    const g = this.game;
+    const gm = this.game;
     if (this.courier || this.taxi || this.active) return false;
-    if (!g.playerCar) return false;
-    const job = makeCourierJob(Math.random, g.city.landmarks);
+    if (!gm.playerCar) return false;
+    const job = makeCourierJob(Math.random, gm.city.landmarks);
     this.courier = new CourierRun(job);
-    g.toast(
+    gm.toast(
       'COURIER JOB',
       `Parcel run: collect at ${this.courier.pickupName}, deliver to ${this.courier.dropName} in ${job.timeLimit}s. Pays $${job.pay}.`,
       6,
@@ -649,27 +459,27 @@ export class MissionManager {
   }
 
   updateCourier(dt) {
-    const g = this.game;
-    if (!this.courier || !g.playerCar) return;
-    const car = g.playerCar;
+    const gm = this.game;
+    if (!this.courier || !gm.playerCar) return;
+    const car = gm.playerCar;
     const event = this.courier.update(dt, car.x, car.y);
     if (event === 'picked') {
-      g.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
-      g.sounds.pickup();
+      gm.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
+      gm.sounds.pickup();
     } else if (event === 'delivered') {
       const bonus = this.courier.speedBonus;
-      g.player.money += this.courier.pay + bonus;
-      if (g.stats) g.stats.recordEarned(this.courier.pay + bonus);
-      g.sounds.cash();
-      g.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
+      gm.player.money += this.courier.pay + bonus;
+      if (gm.stats) gm.stats.recordEarned(this.courier.pay + bonus);
+      gm.sounds.cash();
+      gm.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
       this.courier = null;
     } else if (event === 'expired') {
-      g.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
+      gm.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
       this.courier = null;
     }
   }
 
-  // --- Hidden cash stashes ---
+  // -- hidden cash stashes ------------------------------------------------------
 
   placePackages() {
     const spots = [
@@ -688,21 +498,21 @@ export class MissionManager {
   }
 
   checkPackages() {
-    const g = this.game;
-    const p = g.player;
+    const gm = this.game;
+    const p = gm.player;
     for (const pkg of this.packages) {
       if (pkg.found) continue;
-      if (!insideRadius(p.x, p.y, pkg, 40)) continue;
+      if (!within(p.x, p.y, pkg, 40)) continue;
       pkg.found = true;
       this.packagesFound += 1;
       p.money += 150;
-      if (g.stats) {
-        g.stats.recordEarned(150);
-        g.stats.recordStash();
+      if (gm.stats) {
+        gm.stats.recordEarned(150);
+        gm.stats.recordStash();
       }
-      g.sounds.cash();
-      g.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
-      g.addParticles(pkg.x, pkg.y, 12, '#f2c230');
+      gm.sounds.cash();
+      gm.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
+      gm.addParticles(pkg.x, pkg.y, 12, '#f2c230');
     }
   }
 }
