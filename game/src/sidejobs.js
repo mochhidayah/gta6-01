@@ -2,7 +2,7 @@
 // cab fares with chatty passengers and tips, vigilante takedowns,
 // pizza runs, and 30 hidden packages stashed all over the city.
 //
-// v5 rewrote this file end to end: new dialogue, new structure, new
+// v6 rewrote this file end to end: new dialogue, new structure, new
 // internal names. The work itself is unchanged — same fares, same
 // rewards, same package spots, same timers.
 //
@@ -24,7 +24,7 @@ import { AVENUES, STREETS } from './city.js';
 // HUD toast, so the lines stay readable at speed.
 // ---------------------------------------------------------------------------
 
-const CAB_HELLOS = [
+const TAXI_GREET = [
   'Club Flamingo, please. Step on it — I am late for my own birthday party.',
   'Airport, terminal two. Miss that flight and you are buying me a new ticket.',
   'The docks. No questions, driver. I tip well for silence.',
@@ -35,34 +35,34 @@ const CAB_HELLOS = [
   'The bay hotel. And easy on the brakes, please.',
 ];
 
-const CAB_NAGS = [
+const TAXI_NAG = [
   'Come on — the meter is running and so is my patience.',
   'Faster! I have a dinner table waiting in ten minutes.',
   'You drive like my grandmother. And she is scared of cars.',
   'Left! No — right! Just go that way. You know the way.',
 ];
 
-const CAB_THANKS = [
+const TAXI_THANKS = [
   'Not bad at all. Keep the change — you earned every cent.',
   'Five stars. I never hand out five stars. Do not tell a soul.',
   'Smooth ride. A little extra, for the air conditioning.',
   'Best driver in Palmera Bay. That is a low bar, but take the win.',
 ];
 
-const CAB_FURY = [
+const TAXI_RAGE = [
   'I am walking from here. This whole ride was a disaster.',
   'My aunt drives faster than you, and she is terrified of cars.',
   'Unbelievable. I could have swum there quicker.',
 ];
 
-const PIZZA_GREETS = [
+const PIZZA_HELLO = [
   'Extra cheese, no anchovies. Mix it up and we have a problem.',
   'Thirty minutes or it is free, pal. The clock is already running.',
   'Careful with that box! If it flips, so do you.',
   'Mamma mia, at last. I was about to eat the menu itself.',
 ];
 
-const DISPATCH_CALLS = [
+const DISPATCH_ALERTS = [
   'Dispatch: a Sharks getaway car is tearing down the avenues. Stop it.',
   'Dispatch: Vipers courier on the run with a trunk full of trouble. Bring it down.',
   'Dispatch: stolen Coral Coupe spotted near the docks. Ram it till it stops.',
@@ -72,41 +72,41 @@ const DISPATCH_CALLS = [
 // Hidden package spots: fixed intersections across the whole map, picked
 // so a player who explores will keep stumbling on them. Each entry is
 // [avenueIndex, streetIndex, dx, dy] in world coordinates.
-const STASH_SPOTS = [
-  { a: 0, s: 0, x: 40, y: 30 }, { a: 1, s: 0, x: -50, y: 60 },
-  { a: 2, s: 0, x: 30, y: -40 }, { a: 3, s: 0, x: -30, y: 20 },
-  { a: 4, s: 0, x: 50, y: -60 }, { a: 5, s: 0, x: -40, y: 40 },
-  { a: 6, s: 0, x: 20, y: -30 }, { a: 0, s: 1, x: -60, y: 10 },
-  { a: 1, s: 1, x: 45, y: -25 }, { a: 2, s: 1, x: -35, y: 55 },
-  { a: 3, s: 1, x: 60, y: 30 }, { a: 4, s: 1, x: -45, y: -45 },
-  { a: 5, s: 1, x: 25, y: 60 }, { a: 6, s: 1, x: -20, y: -55 },
-  { a: 0, s: 2, x: 55, y: -35 }, { a: 1, s: 2, x: -25, y: 45 },
-  { a: 2, s: 2, x: 40, y: 20 }, { a: 3, s: 2, x: -55, y: -20 },
-  { a: 4, s: 2, x: 30, y: -50 }, { a: 5, s: 2, x: -30, y: 35 },
-  { a: 6, s: 2, x: 45, y: 45 }, { a: 0, s: 3, x: -40, y: -30 },
-  { a: 1, s: 3, x: 35, y: 55 }, { a: 2, s: 3, x: -50, y: 25 },
-  { a: 3, s: 3, x: 55, y: -55 }, { a: 4, s: 3, x: -35, y: 40 },
-  { a: 5, s: 3, x: 20, y: -40 }, { a: 6, s: 3, x: -45, y: 60 },
-  { a: 1, s: 0, x: 0, y: 0 }, { a: 5, s: 2, x: 0, y: 0 },
+const HIDDEN_STASHES = [
+  { av: 0, st: 0, dx: 40, dy: 30 }, { av: 1, st: 0, dx: -50, dy: 60 },
+  { av: 2, st: 0, dx: 30, dy: -40 }, { av: 3, st: 0, dx: -30, dy: 20 },
+  { av: 4, st: 0, dx: 50, dy: -60 }, { av: 5, st: 0, dx: -40, dy: 40 },
+  { av: 6, st: 0, dx: 20, dy: -30 }, { av: 0, st: 1, dx: -60, dy: 10 },
+  { av: 1, st: 1, dx: 45, dy: -25 }, { av: 2, st: 1, dx: -35, dy: 55 },
+  { av: 3, st: 1, dx: 60, dy: 30 }, { av: 4, st: 1, dx: -45, dy: -45 },
+  { av: 5, st: 1, dx: 25, dy: 60 }, { av: 6, st: 1, dx: -20, dy: -55 },
+  { av: 0, st: 2, dx: 55, dy: -35 }, { av: 1, st: 2, dx: -25, dy: 45 },
+  { av: 2, st: 2, dx: 40, dy: 20 }, { av: 3, st: 2, dx: -55, dy: -20 },
+  { av: 4, st: 2, dx: 30, dy: -50 }, { av: 5, st: 2, dx: -30, dy: 35 },
+  { av: 6, st: 2, dx: 45, dy: 45 }, { av: 0, st: 3, dx: -40, dy: -30 },
+  { av: 1, st: 3, dx: 35, dy: 55 }, { av: 2, st: 3, dx: -50, dy: 25 },
+  { av: 3, st: 3, dx: 55, dy: -55 }, { av: 4, st: 3, dx: -35, dy: 40 },
+  { av: 5, st: 3, dx: 20, dy: -40 }, { av: 6, st: 3, dx: -45, dy: 60 },
+  { av: 1, st: 0, dx: 0, dy: 0 }, { av: 5, st: 2, dx: 0, dy: 0 },
 ];
 
-function squaredDist(ax, ay, bx, by) {
+function dist2(ax, ay, bx, by) {
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
 }
 
-function randomLine(lines) {
+function pickLine(lines) {
   return lines[Math.floor(Math.random() * lines.length)];
 }
 
 export class SideJobs {
   constructor(game) {
     this.game = game;
-    this.packages = STASH_SPOTS.map((spot, i) => ({
+    this.packages = HIDDEN_STASHES.map((spot, i) => ({
       id: i,
-      x: AVENUES[spot.a] + spot.x,
-      y: STREETS[spot.s] + spot.y,
+      x: AVENUES[spot.av] + spot.dx,
+      y: STREETS[spot.st] + spot.dy,
       found: false,
       bob: Math.random() * Math.PI * 2,
     }));
@@ -137,16 +137,16 @@ export class SideJobs {
       offerTimer: 20 + Math.random() * 15,
       pay: 0,
     };
-    this._listenKeys();
+    this._bindKeys();
   }
 
   // -- frame ----------------------------------------------------------------
 
   update(dt) {
-    this._taxiTick(dt);
-    this._vigilanteTick(dt);
-    this._pizzaTick(dt);
-    this._stashTick(dt);
+    this._cabTick(dt);
+    this._vigTick(dt);
+    this._pieTick(dt);
+    this._stashSweep(dt);
   }
 
   // -- drawing (called by the renderer, screen-space via camera) ------------
@@ -173,10 +173,10 @@ export class SideJobs {
     }
     // Cab passenger marker.
     if (this.taxi.state === 'offered') {
-      this._paintMarker(ctx, cam, this.taxi.px, this.taxi.py, '#ffd32a', 'TAXI');
+      this._drawMarker(ctx, cam, this.taxi.px, this.taxi.py, '#ffd32a', 'TAXI');
     }
     if (this.taxi.state === 'aboard') {
-      this._paintMarker(ctx, cam, this.taxi.dx, this.taxi.dy, '#ffd32a', 'DROP');
+      this._drawMarker(ctx, cam, this.taxi.dx, this.taxi.dy, '#ffd32a', 'DROP');
       const left = Math.max(0, Math.ceil(this.taxi.limit - this.taxi.timer));
       ctx.save();
       ctx.fillStyle = '#fff';
@@ -186,17 +186,17 @@ export class SideJobs {
     }
     // Vigilante target marker.
     if (this.vigilante.state === 'active' && this.vigilante.target) {
-      const fare = this.vigilante.target;
-      this._paintMarker(ctx, cam, fare.x, fare.y, '#ff4757', 'TARGET');
+      const mark = this.vigilante.target;
+      this._drawMarker(ctx, cam, mark.x, mark.y, '#ff4757', 'TARGET');
     }
     // Pizza dest marker.
     if (this.pizza.state === 'delivering') {
       const dest = this.pizza.stops[this.pizza.stopIndex];
-      if (dest) this._paintMarker(ctx, cam, dest.x, dest.y, '#ff9f43', 'PIZZA');
+      if (dest) this._drawMarker(ctx, cam, dest.x, dest.y, '#ff9f43', 'PIZZA');
     }
   }
 
-  _paintMarker(ctx, cam, x, y, color, label) {
+  _drawMarker(ctx, cam, x, y, color, label) {
     const sx = x - cam.x;
     const sy = y - cam.y;
     if (sx < -60 || sx > 1340 || sy < -60 || sy > 860) return;
@@ -240,13 +240,13 @@ export class SideJobs {
 
   // -- cab fares ------------------------------------------------------------
 
-  _taxiTick(dt) {
+  _cabTick(dt) {
     const fare = this.taxi;
     if (fare.state === 'idle') {
       fare.offerTimer -= dt;
       if (fare.offerTimer <= 0) {
         fare.offerTimer = 25 + Math.random() * 20;
-        this._offerFare();
+        this._offerCab();
       }
       return;
     }
@@ -256,23 +256,23 @@ export class SideJobs {
       if (fare.offerTimer <= -25) {
         fare.state = 'idle';
         fare.offerTimer = 15 + Math.random() * 10;
-        this._toast('TAXI FARE', 'The passenger gave up and flagged another cab.', 3);
+        this._say('TAXI FARE', 'The passenger gave up and flagged another cab.', 3);
       }
       return;
     }
     // aboard: timer runs, passenger nags, arrival pays.
     fare.timer += dt;
-    const { x, y } = this._whereAmI();
-    const d = Math.sqrt(squaredDist(x, y, fare.dx, fare.dy));
+    const { x, y } = this._myPos();
+    const d = Math.sqrt(dist2(x, y, fare.dx, fare.dy));
     if (fare.timer > fare.limit * 0.6 && fare.timer < fare.limit * 0.6 + dt + 0.01) {
-      this._toast('PASSENGER', randomLine(CAB_NAGS), 3);
+      this._say('PASSENGER', pickLine(TAXI_NAG), 3);
     }
     if (d < 70) {
       const timeBonus = Math.max(0, Math.round((fare.limit - fare.timer) * 0.5));
       fare.tip = 5 + Math.floor(Math.random() * 15) + timeBonus;
-      this._pay(fare.fare, `Fare to ${fare.destName}`);
-      this._pay(fare.tip, 'Tip');
-      this._toast('PASSENGER', randomLine(CAB_THANKS), 4);
+      this._payout(fare.fare, `Fare to ${fare.destName}`);
+      this._payout(fare.tip, 'Tip');
+      this._say('PASSENGER', pickLine(TAXI_THANKS), 4);
       if (this.game.stats && typeof this.game.stats.add === 'function') {
         this.game.stats.add('faresDone', 1);
         this.game.stats.add('tipsEarned', fare.tip);
@@ -282,33 +282,33 @@ export class SideJobs {
       return;
     }
     if (fare.timer > fare.limit) {
-      this._toast('PASSENGER', randomLine(CAB_FURY), 4);
+      this._say('PASSENGER', pickLine(TAXI_RAGE), 4);
       fare.state = 'idle';
       fare.offerTimer = 20 + Math.random() * 10;
     }
   }
 
-  _offerFare() {
-    const { x, y } = this._whereAmI();
-    const spot = this._farRoadPoint(x, y, 300, 900);
-    const dest = this._farRoadPoint(spot.x, spot.y, 700, 1600);
-    const d = Math.sqrt(squaredDist(spot.x, spot.y, dest.x, dest.y));
+  _offerCab() {
+    const { x, y } = this._myPos();
+    const spot = this._distantRoad(x, y, 300, 900);
+    const dest = this._distantRoad(spot.x, spot.y, 700, 1600);
+    const d = Math.sqrt(dist2(spot.x, spot.y, dest.x, dest.y));
     this.taxi.state = 'offered';
     this.taxi.px = spot.x;
     this.taxi.py = spot.y;
     this.taxi.dx = dest.x;
     this.taxi.dy = dest.y;
     this.taxi.fare = 40 + Math.round(d / 50);
-    this.taxi.destName = this._nearestPlace(dest.x, dest.y);
-    this.taxi.passengerLine = randomLine(CAB_HELLOS);
-    this._toast('TAXI FARE', `Passenger waiting — drive to the marker and press E. Destination: ${this.taxi.destName}.`, 6);
+    this.taxi.destName = this._closestPlace(dest.x, dest.y);
+    this.taxi.passengerLine = pickLine(TAXI_GREET);
+    this._say('TAXI FARE', `Passenger waiting — drive to the marker and press E. Destination: ${this.taxi.destName}.`, 6);
   }
 
-  _pickupFare() {
+  _boardCab() {
     this.taxi.state = 'aboard';
     this.taxi.timer = 0;
-    this.taxi.limit = 45 + Math.sqrt(squaredDist(this.taxi.px, this.taxi.py, this.taxi.dx, this.taxi.dy)) / 22;
-    this._toast('PASSENGER', this.taxi.passengerLine, 5);
+    this.taxi.limit = 45 + Math.sqrt(dist2(this.taxi.px, this.taxi.py, this.taxi.dx, this.taxi.dy)) / 22;
+    this._say('PASSENGER', this.taxi.passengerLine, 5);
     if (this.game.stats && typeof this.game.stats.add === 'function') {
       this.game.stats.add('faresStarted', 1);
     }
@@ -316,21 +316,21 @@ export class SideJobs {
 
   // -- vigilante ------------------------------------------------------------
 
-  _vigilanteTick(dt) {
+  _vigTick(dt) {
     const job = this.vigilante;
     if (job.state === 'idle') {
       job.offerTimer -= dt;
       if (job.offerTimer <= 0) {
         job.offerTimer = 35 + Math.random() * 25;
-        this._offerVigilante();
+        this._offerVig();
       }
       return;
     }
     job.timer += dt;
     const target = job.target;
     if (!target || target.wrecked || target.hp <= 0) {
-      this._pay(300, 'Vigilante reward');
-      this._toast('DISPATCH', 'Target down. The streets are a little safer. $300.', 4);
+      this._payout(300, 'Vigilante reward');
+      this._say('DISPATCH', 'Target down. The streets are a little safer. $300.', 4);
       if (this.game.stats && typeof this.game.stats.add === 'function') {
         this.game.stats.add('vigilanteTakedowns', 1);
       }
@@ -340,13 +340,13 @@ export class SideJobs {
       return;
     }
     // Fleeing target: keep it moving away from the player along the roads.
-    const { x, y } = this._whereAmI();
-    const d = Math.sqrt(squaredDist(target.x, target.y, x, y));
+    const { x, y } = this._myPos();
+    const d = Math.sqrt(dist2(target.x, target.y, x, y));
     if (d < 120 && typeof target.speed === 'number') {
       target.speed = Math.min(420, target.speed + 120 * dt);
     }
     if (job.timer > job.limit) {
-      this._toast('DISPATCH', 'Target got away. It happens — next time, drive angrier.', 4);
+      this._say('DISPATCH', 'Target got away. It happens — next time, drive angrier.', 4);
       if (target) target.isVigilanteTarget = false;
       job.state = 'idle';
       job.target = null;
@@ -354,9 +354,9 @@ export class SideJobs {
     }
   }
 
-  _offerVigilante() {
-    const { x, y } = this._whereAmI();
-    const spot = this._farRoadPoint(x, y, 400, 1000);
+  _offerVig() {
+    const { x, y } = this._myPos();
+    const spot = this._distantRoad(x, y, 400, 1000);
     let target = null;
     if (this.game.traffic && typeof this.game.traffic.spawn === 'function') {
       this.game.traffic.spawn(1, spot.x, spot.y);
@@ -369,31 +369,31 @@ export class SideJobs {
     this.vigilante.state = 'active';
     this.vigilante.target = target;
     this.vigilante.timer = 0;
-    this.vigilante.brief = randomLine(DISPATCH_CALLS);
-    this._toast('DISPATCH', `${this.vigilante.brief} Reward $300.`, 6);
+    this.vigilante.brief = pickLine(DISPATCH_ALERTS);
+    this._say('DISPATCH', `${this.vigilante.brief} Reward $300.`, 6);
   }
 
   // -- pizza delivery -------------------------------------------------------
 
-  _pizzaTick(dt) {
+  _pieTick(dt) {
     const run = this.pizza;
     if (run.state === 'idle') {
       run.offerTimer -= dt;
       if (run.offerTimer <= 0) {
         run.offerTimer = 35 + Math.random() * 20;
-        this._offerPizza();
+        this._offerPie();
       }
       return;
     }
     run.timer += dt;
-    const { x, y } = this._whereAmI();
+    const { x, y } = this._myPos();
     const dest = run.stops[run.stopIndex];
-    if (dest && squaredDist(x, y, dest.x, dest.y) < 70 * 70) {
+    if (dest && dist2(x, y, dest.x, dest.y) < 70 * 70) {
       const bonus = run.timer < 60 ? 20 : 0;
-      this._pay(run.pay + bonus, `Pizza delivery ${run.stopIndex + 1}/3`);
+      this._payout(run.pay + bonus, `Pizza delivery ${run.stopIndex + 1}/3`);
       run.stopIndex += 1;
       if (run.stopIndex >= run.stops.length) {
-        this._toast('PIZZA RUN', 'All deliveries done! The shop loves you. Come back for the next shift.', 4);
+        this._say('PIZZA RUN', 'All deliveries done! The shop loves you. Come back for the next shift.', 4);
         if (this.game.stats && typeof this.game.stats.add === 'function') {
           this.game.stats.add('pizzasDelivered', 3);
         }
@@ -401,20 +401,20 @@ export class SideJobs {
         run.offerTimer = 30 + Math.random() * 20;
         return;
       }
-      this._toast('PIZZA RUN', `Delivery ${run.stopIndex + 1}/3 — next customer is waiting.`, 3);
+      this._say('PIZZA RUN', `Delivery ${run.stopIndex + 1}/3 — next customer is waiting.`, 3);
     }
     if (run.timer > run.limit) {
-      this._toast('PIZZA RUN', 'Too slow — the pizzas went cold and the customers complained.', 4);
+      this._say('PIZZA RUN', 'Too slow — the pizzas went cold and the customers complained.', 4);
       run.state = 'idle';
       run.offerTimer = 30 + Math.random() * 20;
     }
   }
 
-  _offerPizza() {
-    const { x, y } = this._whereAmI();
+  _offerPie() {
+    const { x, y } = this._myPos();
     const stops = [];
     for (let i = 0; i < 3; i++) {
-      stops.push(this._farRoadPoint(x, y, 400, 1500));
+      stops.push(this._distantRoad(x, y, 400, 1500));
     }
     this.pizza.state = 'delivering';
     this.pizza.stops = stops;
@@ -422,27 +422,27 @@ export class SideJobs {
     this.pizza.timer = 0;
     this.pizza.limit = 150;
     this.pizza.pay = 60;
-    this._toast('PIZZA RUN', `${randomLine(PIZZA_GREETS)} 3 deliveries, $60 each. Follow the marker!`, 6);
+    this._say('PIZZA RUN', `${pickLine(PIZZA_HELLO)} 3 deliveries, $60 each. Follow the marker!`, 6);
   }
 
   // -- hidden packages ------------------------------------------------------
 
-  _stashTick(dt) {
-    const { x, y } = this._whereAmI();
+  _stashSweep(dt) {
+    const { x, y } = this._myPos();
     for (const pkg of this.packages) {
       if (pkg.found) continue;
       pkg.bob += dt * 2;
-      if (squaredDist(x, y, pkg.x, pkg.y) < 34 * 34) {
+      if (dist2(x, y, pkg.x, pkg.y) < 34 * 34) {
         pkg.found = true;
         this.packagesFound += 1;
-        this._pay(100, `Hidden package ${this.packagesFound}/30`);
+        this._payout(100, `Hidden package ${this.packagesFound}/30`);
         if (this.packagesFound === 10) {
-          this._toast('COLLECTOR', '10 packages! The old smuggler would be proud.', 4);
+          this._say('COLLECTOR', '10 packages! The old smuggler would be proud.', 4);
         } else if (this.packagesFound === 20) {
-          this._toast('COLLECTOR', '20 packages! Only 10 left out there.', 4);
+          this._say('COLLECTOR', '20 packages! Only 10 left out there.', 4);
         } else if (this.packagesFound === 30) {
-          this._pay(1000, 'ALL 30 packages — collector bonus');
-          this._toast('COLLECTOR', 'ALL 30 PACKAGES! $1,000 bonus. You know this city better than the mayor.', 6);
+          this._payout(1000, 'ALL 30 packages — collector bonus');
+          this._say('COLLECTOR', 'ALL 30 PACKAGES! $1,000 bonus. You know this city better than the mayor.', 6);
         }
         if (this.game.stats && typeof this.game.stats.add === 'function') {
           this.game.stats.add('packagesFound', 1);
@@ -453,46 +453,46 @@ export class SideJobs {
 
   // -- small guarded game helpers -------------------------------------------
 
-  _whereAmI() {
-    const run = this.game.player;
-    if (!run) return { x: 0, y: 0 };
-    return { x: run.x || 0, y: run.y || 0 };
+  _myPos() {
+    const hero = this.game.player;
+    if (!hero) return { x: 0, y: 0 };
+    return { x: hero.x || 0, y: hero.y || 0 };
   }
 
-  _riding() {
+  _inCar() {
     return !!(this.game.player && this.game.player.inCar);
   }
 
-  _pay(amount, label) {
+  _payout(amount, label) {
     const g = this.game;
     if (typeof g.addCash === 'function') g.addCash(amount);
     else if (typeof g.money === 'number') g.money += amount;
     else if (typeof g.cash === 'number') g.cash += amount;
-    if (label) this._toast('CASH', `${label} +$${amount}`);
+    if (label) this._say('CASH', `${label} +$${amount}`);
     if (g.stats && typeof g.stats.add === 'function') g.stats.add('cashEarned', amount);
   }
 
-  _toast(title, text, secs = 4) {
+  _say(title, text, secs = 4) {
     const g = this.game;
     if (g.hud && typeof g.hud.toast === 'function') g.hud.toast(title, text, secs);
   }
 
-  _setHeat(n) {
+  _setStars(n) {
     if (typeof this.game.setWanted === 'function') this.game.setWanted(n);
   }
 
-  _farRoadPoint(x, y, minD = 500, maxD = 1400) {
+  _distantRoad(x, y, minD = 500, maxD = 1400) {
     // A random road point at a reasonable distance from (x, y).
     for (let tries = 0; tries < 12; tries++) {
       const ax = AVENUES[Math.floor(Math.random() * AVENUES.length)];
       const sy = STREETS[Math.floor(Math.random() * STREETS.length)];
-      const d = Math.sqrt(squaredDist(ax, sy, x, y));
+      const d = Math.sqrt(dist2(ax, sy, x, y));
       if (d >= minD && d <= maxD) return { x: ax, y: sy };
     }
     return { x: AVENUES[2], y: STREETS[1] };
   }
 
-  _nearestPlace(x, y) {
+  _closestPlace(x, y) {
     const names = [
       ['the docks', 0, 3], ['the airport', 6, 0], ['the stadium', 5, 2],
       ['Club Flamingo', 4, 1], ['the bank', 3, 1], ['Coral Beach', 2, 3],
@@ -501,23 +501,23 @@ export class SideJobs {
     let best = names[0];
     let bestD = Infinity;
     for (const [name, ai, si] of names) {
-      const d = squaredDist(AVENUES[ai], STREETS[si], x, y);
+      const d = dist2(AVENUES[ai], STREETS[si], x, y);
       if (d < bestD) { bestD = d; best = [name, ai, si]; }
     }
     return best[0];
   }
 
-  _listenKeys() {
+  _bindKeys() {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
-      if (e.code === 'KeyE') this._onInteract();
+      if (e.code === 'KeyE') this._onPressE();
     });
   }
 
-  _onInteract() {
+  _onPressE() {
     if (this.taxi.state === 'offered') {
-      const { x, y } = this._whereAmI();
-      if (squaredDist(x, y, this.taxi.px, this.taxi.py) < 90 * 90) this._pickupFare();
+      const { x, y } = this._myPos();
+      if (dist2(x, y, this.taxi.px, this.taxi.py) < 90 * 90) this._boardCab();
     }
   }
 }
