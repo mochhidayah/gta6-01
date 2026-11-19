@@ -190,6 +190,10 @@ export class EmpireMissions {
     this.open = true;
     this.briefT = 0;
     this._pending = job;
+    // The briefing owns the screen: close the shops so their keys rest.
+    if (this.g.empire) this.g.empire.open = false;
+    if (this.g.garage) this.g.garage.open = false;
+    if (this.g.arsenal) this.g.arsenal.open = false;
   }
 
   _begin(job) {
@@ -343,13 +347,16 @@ export class EmpireMissions {
           const job = this._pending;
           this._pending = null;
           if (job) this._begin(job);
-        } else if (pad.wasPressed('Escape')) {
-          this.open = false;
-          this._pending = null;
         }
       } else if (pad.wasPressed('KeyJ')) {
         this.tryStart();
       }
+    }
+    // Walking away from the fixer closes the briefing: Escape belongs to
+    // the game's pause menu and never reaches this code.
+    if (this.open && !this._nearMarker()) {
+      this.open = false;
+      this._pending = null;
     }
     if (this.active) this._stepTick(dt);
   }
@@ -458,16 +465,16 @@ export class EmpireMissions {
     }
     ctx.fillStyle = '#9aa3ad';
     ctx.font = '14px sans-serif';
-    ctx.fillText('Enter or J to take the job  •  Esc to walk away', x0 + 24, y0 + H - 22);
+    ctx.fillText('Enter or J to take the job  •  walk away to leave it', x0 + 24, y0 + H - 22);
   }
 
   drawHudLine(ctx) {
     const label = this._currentLabel();
     if (!label || !ctx) return;
+    ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = 'rgba(8, 12, 18, 0.85)';
     ctx.fillRect(20, 108, ctx.measureText(label).width + 24, 26);
     ctx.fillStyle = '#ffd94d';
-    ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(label, 32, 126);
   }

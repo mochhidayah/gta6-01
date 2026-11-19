@@ -282,7 +282,7 @@ export class CityLife {
   _rollEncounter() {
     const def = ENCOUNTERS[Math.floor(Math.random() * ENCOUNTERS.length)];
     this.encounter = { def, t: 14 };
-    this._toast('SOMEBODY NEEDS A HAND', `${def.text} Press 1 to help, 2 to walk on.`, 6);
+    this._toast('SOMEBODY NEEDS A HAND', `${def.text} Press Enter to help, 3 to walk on.`, 6);
   }
 
   _resolveEncounter(help) {
@@ -342,8 +342,8 @@ export class CityLife {
     const pad = this.g.input;
     if (pad && typeof pad.wasPressed === 'function') {
       if (this.encounter) {
-        if (pad.wasPressed('Digit1')) this._resolveEncounter(true);
-        else if (pad.wasPressed('Digit2')) this._resolveEncounter(false);
+        if (pad.wasPressed('Enter')) this._resolveEncounter(true);
+        else if (pad.wasPressed('Digit3')) this._resolveEncounter(false);
       } else if (pad.wasPressed('KeyL')) {
         this._buySnack();
       }
@@ -443,10 +443,10 @@ export class CityLife {
     if (!ctx) return;
     if (typeof window !== 'undefined' && window.__shot) return;
     const label = `${this._clockText()}  •  ${this._slot()}  •  street rep ${Math.round(this.rep)}`;
+    ctx.font = 'bold 13px sans-serif';
     ctx.fillStyle = 'rgba(8, 12, 18, 0.8)';
     ctx.fillRect(20, 140, ctx.measureText(label).width + 24, 24);
     ctx.fillStyle = '#2ec4b6';
-    ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(label, 32, 157);
   }

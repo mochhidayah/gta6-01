@@ -231,6 +231,9 @@ export class Arsenal {
   _fire() {
     const p = this.g && this.g.player;
     if (!p) return;
+    // Arsenal weapons fire on foot. In a car, F belongs to the garage's
+    // nitro — the two never fight over the same key.
+    if (p.inCar) return;
     if (this.coolT > 0) return;
     const def = this._def(this.equipped);
     if (def.mag > 0 && (this.ammo[this.equipped] || 0) <= 0) {
@@ -301,12 +304,16 @@ export class Arsenal {
     if (this.flashT > 0) this.flashT -= dt;
     const pad = this.g.input;
     if (pad && typeof pad.wasPressed === 'function') {
-      if (pad.wasPressed('KeyY') && !this.open) {
-        this.open = true;
-        this.tab = 0;
-        this.sel = 0;
-      } else if (pad.wasPressed('Escape') && this.open) {
-        this.open = false;
+      if (pad.wasPressed('KeyY')) {
+        if (this.open) {
+          this.open = false;
+        } else {
+          this.open = true;
+          this.tab = 0;
+          this.sel = 0;
+          if (this.g.empire) this.g.empire.open = false;
+          if (this.g.garage) this.g.garage.open = false;
+        }
       } else if (this.open) {
         const lists = [WEAPONS, ATTACHMENTS, [null, null]];
         const list = lists[this.tab];
@@ -314,12 +321,12 @@ export class Arsenal {
         if (pad.wasPressed('ArrowRight')) this.tab = (this.tab + 1) % 3;
         if (pad.wasPressed('ArrowUp')) this.sel = (this.sel + list.length - 1) % list.length;
         if (pad.wasPressed('ArrowDown')) this.sel = (this.sel + 1) % list.length;
-        if (pad.wasPressed('Digit1')) {
+        if (pad.wasPressed('Enter')) {
           if (this.tab === 0) this._buyWeapon();
           else if (this.tab === 1) this._buyAttachment();
           else this._craftAmmo();
         }
-        if (pad.wasPressed('Digit2')) {
+        if (pad.wasPressed('Digit3')) {
           if (this.tab === 0) this._buyAmmo();
           else if (this.tab === 2) this._buyParts();
         }
@@ -393,15 +400,15 @@ export class Arsenal {
     }
     ctx.fillStyle = '#9aa3ad';
     ctx.font = '13px sans-serif';
-    ctx.fillText('Left / Right tabs  •  Up / Down pick  •  1 buy / fit / craft  •  2 ammo / parts  •  Esc close', x0 + 24, y0 + 122);
+    ctx.fillText('Left / Right tabs  •  Up / Down pick  •  Enter buy / fit / craft  •  3 ammo / parts  •  Y close', x0 + 24, y0 + 122);
 
     if (this.tab === 2) {
       ctx.fillStyle = '#e8ecf1';
       ctx.font = 'bold 17px sans-serif';
       ctx.fillText('WORKBENCH', x0 + 24, y0 + 170);
       ctx.font = '15px sans-serif';
-      ctx.fillText(`Scrap parts: ${this.parts}  (a crate of ${PARTS_PER_CRATE} costs $${PARTS_CRATE_PRICE} — press 2)`, x0 + 24, y0 + 198);
-      ctx.fillText(`Crafting one box takes ${PARTS_PER_BOX} parts and makes ${AMMO_PER_BOX} rounds for the equipped weapon — press 1.`, x0 + 24, y0 + 224);
+      ctx.fillText(`Scrap parts: ${this.parts}  (a crate of ${PARTS_PER_CRATE} costs $${PARTS_CRATE_PRICE} — press 3)`, x0 + 24, y0 + 198);
+      ctx.fillText(`Crafting one box takes ${PARTS_PER_BOX} parts and makes ${AMMO_PER_BOX} rounds for the equipped weapon — press Enter.`, x0 + 24, y0 + 224);
       ctx.fillStyle = '#9aa3ad';
       ctx.font = '14px sans-serif';
       ctx.fillText(`Equipped now: ${this._def(this.equipped).name} — ${(this.ammo[this.equipped] || 0)} rounds in hand.`, x0 + 24, y0 + 252);
@@ -464,7 +471,7 @@ export class Arsenal {
       } else if (this.owned[def.id]) {
         ctx.fillStyle = '#66d9ff';
         ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`OWNED — ${(this.ammo[def.id] || 0)} rds (1 to equip)`, x0 + W - 24, rowY);
+        ctx.fillText(`OWNED — ${(this.ammo[def.id] || 0)} rds (Enter to equip)`, x0 + W - 24, rowY);
       } else {
         ctx.fillStyle = '#ffd94d';
         ctx.font = 'bold 14px sans-serif';

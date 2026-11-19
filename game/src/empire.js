@@ -327,19 +327,27 @@ export class BusinessEmpire {
     const pad = this.g.input;
 
     // Open and close the empire menu. It pauses nothing, but the world
-    // keeps moving while Marco reads the books.
+    // keeps moving while Marco reads the books. B toggles the menu: the
+    // game's own Escape key pauses the game before this code ever sees
+    // it, so Escape cannot close a menu.
     if (pad && typeof pad.wasPressed === 'function') {
-      if (pad.wasPressed('KeyB') && !this.open) {
-        this.open = true;
-        this.sel = 0;
-      } else if (pad.wasPressed('Escape') && this.open) {
-        this.open = false;
+      if (pad.wasPressed('KeyB')) {
+        if (this.open) {
+          this.open = false;
+        } else {
+          this.open = true;
+          this.sel = 0;
+          // One menu at a time: close the other shops so their keys do not
+          // fire while Marco reads the books.
+          if (this.g.garage) this.g.garage.open = false;
+          if (this.g.arsenal) this.g.arsenal.open = false;
+        }
       } else if (this.open) {
         if (pad.wasPressed('ArrowUp')) this.sel = (this.sel + CATALOG.length - 1) % CATALOG.length;
         if (pad.wasPressed('ArrowDown')) this.sel = (this.sel + 1) % CATALOG.length;
-        if (pad.wasPressed('Digit1')) this.buy(this.sel);
-        if (pad.wasPressed('Digit2')) this.upgrade(this.sel);
-        if (pad.wasPressed('Digit3')) this.collect();
+        if (pad.wasPressed('Enter')) this.buy(this.sel);
+        if (pad.wasPressed('Digit3')) this.upgrade(this.sel);
+        if (pad.wasPressed('Digit4')) this.collect();
       }
     }
 
@@ -373,7 +381,7 @@ export class BusinessEmpire {
           this.weekPayouts = 0;
           this.weekIncome = 0;
         } else {
-          this._toast('PAYOUT BANKED', `Your businesses earned $${total}. Press B, then 3, to collect.`);
+          this._toast('PAYOUT BANKED', `Your businesses earned $${total}. Press B, then 4, to collect.`);
         }
       }
     }
@@ -444,7 +452,7 @@ export class BusinessEmpire {
     ctx.fillText(`Cash: $${cash}    Banked: $${this.banked}    Lifetime earned: $${this.lifetimeEarned}`, x0 + 24, y0 + 64);
     ctx.fillStyle = '#9aa3ad';
     ctx.font = '13px sans-serif';
-    ctx.fillText('Up / Down to pick  •  1 buy  •  2 upgrade  •  3 collect banked  •  Esc close', x0 + 24, y0 + 86);
+    ctx.fillText('Up / Down to pick  •  Enter buy  •  3 upgrade  •  4 collect banked  •  B close', x0 + 24, y0 + 86);
     if (this.raid) {
       const def = CATALOG.find((d) => d.id === this.raid.businessId);
       ctx.fillStyle = '#ff6b61';

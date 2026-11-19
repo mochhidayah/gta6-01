@@ -298,16 +298,18 @@ export class Garage {
     if (this._toastCd > 0) this._toastCd -= dt;
     const pad = this.g.input;
     if (pad && typeof pad.wasPressed === 'function') {
-      if (pad.wasPressed('KeyG') && !this.open) {
-        if (!this._car()) {
+      if (pad.wasPressed('KeyG')) {
+        if (this.open) {
+          this.open = false;
+        } else if (!this._car()) {
           this._toast('NO CAR', 'Get in a car first, then press G for the garage.');
         } else {
           this.open = true;
           this.tab = 0;
           this.sel = 0;
+          if (this.g.empire) this.g.empire.open = false;
+          if (this.g.arsenal) this.g.arsenal.open = false;
         }
-      } else if (pad.wasPressed('Escape') && this.open) {
-        this.open = false;
       } else if (this.open) {
         const lists = [PAINTS, WHEELS, ENGINES, ARMOUR, [null]];
         const list = lists[this.tab];
@@ -315,10 +317,13 @@ export class Garage {
         if (pad.wasPressed('ArrowRight')) this.tab = (this.tab + 1) % 5;
         if (pad.wasPressed('ArrowUp')) this.sel = (this.sel + list.length - 1) % list.length;
         if (pad.wasPressed('ArrowDown')) this.sel = (this.sel + 1) % list.length;
-        if (pad.wasPressed('Digit1')) this._buyCurrent();
-        if (pad.wasPressed('Digit2')) this._repair();
-        if (pad.wasPressed('Digit3')) this._sellBack();
-      } else if (pad.wasPressed('KeyF')) {
+        if (pad.wasPressed('Enter')) this._buyCurrent();
+        if (pad.wasPressed('Digit3')) this._repair();
+        if (pad.wasPressed('Digit4')) this._sellBack();
+      } else if (this._car() && pad.wasPressed('KeyF')) {
+        // The car check comes first on purpose: wasPressed consumes the
+        // press, and on foot the F key belongs to the arsenal's firing.
+        // Only burn nitro when there is actually a car under Marco.
         this._tryBoost();
       }
     }
@@ -400,7 +405,7 @@ export class Garage {
     }
     ctx.fillStyle = '#9aa3ad';
     ctx.font = '13px sans-serif';
-    ctx.fillText('Left / Right tabs  •  Up / Down pick  •  1 buy or fill  •  2 repair ($240)  •  3 sell fitted part back  •  Esc close', x0 + 24, y0 + 122);
+    ctx.fillText('Left / Right tabs  •  Up / Down pick  •  Enter buy or fill  •  3 repair ($240)  •  4 sell fitted part back  •  G close', x0 + 24, y0 + 122);
     const b = car ? this.buildFor(car) : freshBuild();
     if (this.tab === 4) {
       ctx.fillStyle = '#e8ecf1';
@@ -412,7 +417,7 @@ export class Garage {
       ctx.fillRect(x0 + 24, y0 + 186, (W - 48) * (b.nitro / NITRO_TANK), 26);
       ctx.fillStyle = '#e8ecf1';
       ctx.font = '15px sans-serif';
-      ctx.fillText(`${Math.round(b.nitro)}% full — press 1 to refill for $${NITRO_REFILL}`, x0 + 24, y0 + 236);
+      ctx.fillText(`${Math.round(b.nitro)}% full — press Enter to refill for $${NITRO_REFILL}`, x0 + 24, y0 + 236);
       ctx.fillStyle = '#9aa3ad';
       ctx.font = '14px sans-serif';
       ctx.fillText('Burn it with F while driving. A bigger engine makes the burn hit harder.', x0 + 24, y0 + 262);
@@ -468,7 +473,7 @@ export class Garage {
     ctx.fillStyle = '#9aa3ad';
     ctx.font = '13px sans-serif';
     const cur = list[ownedIdx];
-    ctx.fillText(`On this car now: ${cur ? cur.name : '—'}   •   Repair the car any time with 2 ($${REPAIR_COST})`, x0 + 24, footY);
+    ctx.fillText(`On this car now: ${cur ? cur.name : '—'}   •   Repair the car any time with 3 ($${REPAIR_COST})`, x0 + 24, footY);
     // Showroom log: the most recent thing fitted to any car.
     if (this.log.length > 0) {
       ctx.fillStyle = '#66d9ff';

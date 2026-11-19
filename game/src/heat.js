@@ -177,7 +177,7 @@ export class DistrictHeat {
     const def = DISTRICT_EVENTS[Math.floor(Math.random() * DISTRICT_EVENTS.length)];
     this.event = { def, district: d, t: 18 };
     this.eventsSeen += 1;
-    this._toast(def.title, `${def.text} Press 1 to take it, 2 to ignore it.`, 6);
+    this._toast(def.title, `${def.text} Press Enter to take it, 3 to ignore it.`, 6);
   }
 
   _resolveDistrictEvent(take) {
@@ -257,12 +257,13 @@ export class DistrictHeat {
     const pad = this.g.input;
     if (pad && typeof pad.wasPressed === 'function') {
       if (this.event) {
-        if (pad.wasPressed('Digit1')) this._resolveDistrictEvent(true);
-        else if (pad.wasPressed('Digit2')) this._resolveDistrictEvent(false);
+        if (pad.wasPressed('Enter')) this._resolveDistrictEvent(true);
+        else if (pad.wasPressed('Digit3')) this._resolveDistrictEvent(false);
       } else if (pad.wasPressed('KeyV')) {
         this.tryBribe();
       }
-      if (pad.wasPressed('Escape') && this.boardOpen) this.boardOpen = false;
+      // No Escape handling here: the game's pause menu eats Escape first.
+      // V with no stars toggles the board open and closed.
     }
 
     // District events roll on their own schedule while Marco is out.
@@ -349,11 +350,11 @@ export class DistrictHeat {
     const d = this.currentDistrict();
     const h = this.heatOf(d.id);
     const label = `${d.name} — heat ${Math.round(h)}`;
+    ctx.font = 'bold 13px sans-serif';
     const w = ctx.measureText(label).width + 24;
     ctx.fillStyle = 'rgba(8, 12, 18, 0.8)';
     ctx.fillRect(20, 76, w, 24);
     ctx.fillStyle = this._heatColor(h);
-    ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(label, 32, 93);
     // A thin heat bar under the label.

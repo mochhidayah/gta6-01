@@ -19,6 +19,8 @@
 //
 // Play it locally with `node serve.ts`, then open http://localhost:8080.
 // v6: two local names refreshed; the hand-in itself is unchanged.
+// v7: six new systems (empire, garage, missions 14–18, district heat,
+// city life, arsenal) wired in; hand-in contents grow by six files.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 

@@ -13,6 +13,10 @@ a bank job, a night-shift courier rush, a turf war, one last dockside heist, and
 a street race at the stadium, payback at the docks, and a clean slate at the airfield — plus taxi
 fares, courier runs, street races, daily challenges and hidden cash stashes in free roam.
 
+## What's new in v7
+
+- **Six brand-new systems** — a business empire with rival raids and weekly bonuses, a garage with paint, wheels, engines, armour and nitro, five empire missions (14–18), district heat with bribes and a most-wanted board, ambient city life with regulars and street events, and an arsenal with eight weapons, attachments and an ammo workbench. All 3,012 lines were invented from scratch in one recorded session; the city map is byte-identical to v6.
+
 ## What's new in v6
 
 - **Authored rebuild** — the twelve dossier files were rewritten in one session under a fresh
