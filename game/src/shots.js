@@ -5,18 +5,19 @@
 // beach (sunset drive along Coral Bay). v4 rewrote this file wholesale
 // — same scenes, same framing — with one fix: the staged mission state
 // now carries defeatBase, so a staged defeat step counts correctly.
+// v6: a few internal names refreshed, behaviour identical.
 import { AVENUES, STREETS } from './city.js';
 import { Car } from './vehicles.js';
 import { STORY } from './missions.js';
 
 // Centre the camera on a world point.
-function centerCamera(game, x, y) {
+function frameOn(game, x, y) {
   game.renderer.cam.x = x - 640;
   game.renderer.cam.y = y - 400;
 }
 
 // Put Marco in a car at a spot, driving, and make it his car.
-function placeCar(game, x, y, angle, modelIndex, speed) {
+function seatCar(game, x, y, angle, modelIndex, speed) {
   const car = new Car(x, y, angle, modelIndex, { driver: null });
   car.speed = speed;
   game.traffic.cars.push(car);
@@ -28,7 +29,7 @@ function placeCar(game, x, y, angle, modelIndex, speed) {
 }
 
 // Jump the story to one mission at one step.
-function stageMission(game, storyIndex, step, holdT = 0) {
+function setStage(game, storyIndex, step, holdT = 0) {
   game.missions.storyIndex = storyIndex;
   game.missions.active = { def: STORY[storyIndex], step, timer: 0, holdT, defeatBase: 0 };
 }
@@ -39,17 +40,17 @@ const SCENES = {
   cover(game) {
     const x = AVENUES[5];
     const y = STREETS[2];
-    placeCar(game, x, y - 40, Math.PI / 2, 0, 420);
+    seatCar(game, x, y - 40, Math.PI / 2, 0, 420);
     game.setWanted(4);
     game.crimeHeat = 4;
     for (let i = 0; i < 3; i++) {
-      const cruiser = game.traffic.spawnPolice(x + (i - 1) * 130, y - 300 - i * 60, Math.PI / 2);
-      cruiser.speed = 300;
+      const cop = game.traffic.spawnPolice(x + (i - 1) * 130, y - 300 - i * 60, Math.PI / 2);
+      cop.speed = 300;
     }
     game.police.forceHeli(x - 320, y - 180);
     game.police.watched = true;
-    stageMission(game, 4, 2);
-    centerCamera(game, x, y - 40);
+    setStage(game, 4, 2);
+    frameOn(game, x, y - 40);
     game.hud.toast('BANK JOB', 'Escape! Lose the 4-star wanted level.', 30);
   },
 
@@ -64,7 +65,7 @@ const SCENES = {
     game.crowd.spawn(14, x, y);
     game.missions.storyIndex = 0;
     game.missions.startStory();
-    centerCamera(game, x, y);
+    frameOn(game, x, y);
   },
 
   // Mid bank robbery: inside the hold ring, pistol out, cops closing in.
@@ -80,8 +81,8 @@ const SCENES = {
     game.traffic.spawnPolice(bank.x - 200, bank.y - 260, Math.PI / 3);
     game.traffic.spawn(4, bank.x, bank.y);
     game.crowd.spawn(6, bank.x, bank.y);
-    stageMission(game, 4, 1, 3.5);
-    centerCamera(game, bank.x, bank.y);
+    setStage(game, 4, 1, 3.5);
+    frameOn(game, bank.x, bank.y);
     game.hud.toast('BANK JOB', 'Hold up the bank — stay inside the marker 6 seconds.', 30);
   },
 
@@ -89,11 +90,11 @@ const SCENES = {
   beach(game) {
     const x = AVENUES[4];
     const y = 2400;
-    placeCar(game, x, y, 0, 7, 350);
+    seatCar(game, x, y, 0, 7, 350);
     game.traffic.spawn(6, x, y);
     game.crowd.spawn(8, x, y);
-    stageMission(game, 1, 1);
-    centerCamera(game, x, y);
+    setStage(game, 1, 1);
+    frameOn(game, x, y);
     game.hud.toast('THE PICKUP', 'Drive Lucia to Club Flamingo.', 30);
   },
 
@@ -101,19 +102,19 @@ const SCENES = {
   // rivals, the countdown about to run, the first checkpoint ahead.
   race(game) {
     const pad = game.races.pad;
-    placeCar(game, pad.x, pad.y + 130, Math.PI / 2, 0, 0);
+    seatCar(game, pad.x, pad.y + 130, Math.PI / 2, 0, 0);
     game.races.state = 'armed';
     game.races.startRace(game);
     game.traffic.spawn(4, pad.x, pad.y);
     game.crowd.spawn(10, pad.x, pad.y);
-    centerCamera(game, pad.x, pad.y + 60);
+    frameOn(game, pad.x, pad.y + 60);
     game.hud.toast('STREET RACE', 'Three rivals, four checkpoints — first across the line takes $800.', 30);
   },
 };
 
 export function applyShot(game) {
-  const query = new URLSearchParams(window.location.search);
-  const shot = query.get('shot');
+  const params = new URLSearchParams(window.location.search);
+  const shot = params.get('shot');
   if (!shot || !SCENES[shot]) return;
   // Skip the start menu: the scene IS the game, already running.
   game.startGame(false);

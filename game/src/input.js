@@ -5,13 +5,13 @@
 // press, then the frame loop clears it. The mouse position is
 // reported in canvas pixels, scaled from the element's box. v4 rewrote
 // this file wholesale — same behaviour, new structure.
-// v5: a couple of local names refreshed, behaviour identical.
-const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+// v6: a couple of local names refreshed, behaviour identical.
+const PAGE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export class Input {
   constructor(canvas) {
     this.down = {}; // currently held keys, by code
-    this.struck = {}; // keys pressed since the last frame
+    this.hit = {}; // keys pressed since the last frame
     this.mouse = { x: 0, y: 0, held: false, clicked: false };
     this.wheelDelta = 0; // accumulated wheel scroll since the last frame
     this.canvas = canvas;
@@ -19,9 +19,9 @@ export class Input {
   }
 
   attach(canvas) {
-    window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => this.onKeyUp(e));
-    window.addEventListener('blur', () => this.releaseAll());
+    window.addEventListener('keydown', (e) => this.onDown(e));
+    window.addEventListener('keyup', (e) => this.onUp(e));
+    window.addEventListener('blur', () => this.clearKeys());
     window.addEventListener('mouseup', () => {
       this.mouse.held = false;
     });
@@ -31,25 +31,25 @@ export class Input {
     canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
   }
 
-  onKeyDown(event) {
+  onDown(event) {
     if (event.repeat) return;
     this.down[event.code] = true;
-    this.struck[event.code] = true;
-    if (SCROLL_KEYS.has(event.code)) event.preventDefault();
+    this.hit[event.code] = true;
+    if (PAGE_KEYS.has(event.code)) event.preventDefault();
   }
 
-  onKeyUp(event) {
+  onUp(event) {
     this.down[event.code] = false;
   }
 
-  releaseAll() {
+  clearKeys() {
     this.down = {};
   }
 
   onMouseMove(event) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.mouse.x = (event.clientX - rect.left) * (this.canvas.width / rect.width);
-    this.mouse.y = (event.clientY - rect.top) * (this.canvas.height / rect.height);
+    const box = this.canvas.getBoundingClientRect();
+    this.mouse.x = (event.clientX - box.left) * (this.canvas.width / box.width);
+    this.mouse.y = (event.clientY - box.top) * (this.canvas.height / box.height);
   }
 
   onMouseDown(event) {
@@ -68,28 +68,28 @@ export class Input {
   // The wheel delta since the last frame (0 when untouched),
   // consumed on read like a key press.
   takeWheel() {
-    const d = this.wheelDelta;
+    const delta = this.wheelDelta;
     this.wheelDelta = 0;
-    return d;
+    return delta;
   }
 
   // True once per physical press of the key.
   wasPressed(code) {
-    if (!this.struck[code]) return false;
-    this.struck[code] = false;
+    if (!this.hit[code]) return false;
+    this.hit[code] = false;
     return true;
   }
 
   // True once per mouse click.
   takeClick() {
-    const hit = this.mouse.clicked;
+    const tap = this.mouse.clicked;
     this.mouse.clicked = false;
-    return hit;
+    return tap;
   }
 
   // Call at the end of every frame.
   endFrame() {
-    this.struck = {};
+    this.hit = {};
     this.mouse.clicked = false;
   }
 }
