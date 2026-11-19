@@ -7,27 +7,27 @@
 // and a darker sky — so it never changes how the game plays, only
 // how it feels. The HUD announces a change with a toast. v4 rewrote
 // this file wholesale — same spells, same timings, new structure.
-// v5: a few internal names refreshed, behaviour identical.
-const CLEAR_LO = 75; // seconds of clear sky before the next roll
-const CLEAR_HI = 150;
-const RAIN_LO = 25; // seconds a downpour lasts
-const RAIN_HI = 60;
-const RAIN_ODDS = 0.35; // odds the sky breaks after a clear spell
-const FOG_ODDS = 0.25; // odds the bay fog rolls in instead
-const FOG_LO = 30; // seconds the fog hangs around
-const FOG_HI = 75;
-const DROPS = 140;
+// v6: a few internal names refreshed, behaviour identical.
+const CALM_LO = 75; // seconds of clear sky before the next roll
+const CALM_HI = 150;
+const STORM_LO = 25; // seconds a downpour lasts
+const STORM_HI = 60;
+const STORM_ODDS = 0.35; // odds the sky breaks after a clear spell
+const MIST_ODDS = 0.25; // odds the bay fog rolls in instead
+const MIST_LO = 30; // seconds the fog hangs around
+const MIST_HI = 75;
+const DROP_COUNT = 140;
 
 export class Weather {
   constructor() {
     this.state = 'clear'; // clear | rain | fog
-    this.timer = CLEAR_LO + Math.random() * (CLEAR_HI - CLEAR_LO);
+    this.timer = CALM_LO + Math.random() * (CALM_HI - CALM_LO);
     this.intensity = 0; // 0 = dry, 1 = full downpour; ramps smoothly
     this.fog = 0; // 0 = clear air, 1 = thick bay fog; ramps smoothly
     this.flash = 0; // lightning flash, fading out (0..1)
     this.flashTimer = 0;
     this.drops = [];
-    for (let i = 0; i < DROPS; i++) {
+    for (let i = 0; i < DROP_COUNT; i++) {
       this.drops.push({ x: Math.random(), y: Math.random(), speed: 900 + Math.random() * 500 });
     }
   }
@@ -36,14 +36,14 @@ export class Weather {
   // and ease the rain in or out.
   update(dt, game) {
     this.timer -= dt;
-    if (this.timer <= 0) this.rollSky(game);
-    const goal = this.state === 'rain' ? 1 : 0;
-    const ease = dt * 0.8;
-    if (this.intensity < goal) this.intensity = Math.min(goal, this.intensity + ease);
-    else if (this.intensity > goal) this.intensity = Math.max(goal, this.intensity - ease);
-    const fogGoal = this.state === 'fog' ? 1 : 0;
-    if (this.fog < fogGoal) this.fog = Math.min(fogGoal, this.fog + dt * 0.5);
-    else if (this.fog > fogGoal) this.fog = Math.max(fogGoal, this.fog - dt * 0.5);
+    if (this.timer <= 0) this.pickSky(game);
+    const target = this.state === 'rain' ? 1 : 0;
+    const step = dt * 0.8;
+    if (this.intensity < target) this.intensity = Math.min(target, this.intensity + step);
+    else if (this.intensity > target) this.intensity = Math.max(target, this.intensity - step);
+    const mistGoal = this.state === 'fog' ? 1 : 0;
+    if (this.fog < mistGoal) this.fog = Math.min(mistGoal, this.fog + dt * 0.5);
+    else if (this.fog > mistGoal) this.fog = Math.max(mistGoal, this.fog - dt * 0.5);
     for (const drop of this.drops) {
       drop.y += (drop.speed * dt) / 800;
       if (drop.y > 1) {
@@ -64,24 +64,24 @@ export class Weather {
   }
 
   // The current spell ended: pick the next one.
-  rollSky(game) {
+  pickSky(game) {
     if (this.state === 'clear') {
-      const dice = Math.random();
-      if (dice < RAIN_ODDS) {
+      const roll = Math.random();
+      if (roll < STORM_ODDS) {
         this.state = 'rain';
-        this.timer = RAIN_LO + Math.random() * (RAIN_HI - RAIN_LO);
+        this.timer = STORM_LO + Math.random() * (STORM_HI - STORM_LO);
         game.toast('RAIN MOVING IN', 'A downpour rolls in off Coral Bay — drive careful.', 4);
-      } else if (dice < RAIN_ODDS + FOG_ODDS) {
+      } else if (roll < STORM_ODDS + MIST_ODDS) {
         this.state = 'fog';
-        this.timer = FOG_LO + Math.random() * (FOG_HI - FOG_LO);
+        this.timer = MIST_LO + Math.random() * (MIST_HI - MIST_LO);
         game.toast('BAY FOG', 'Thick fog rolls off the water — watch the road, not the sky.', 4);
       } else {
         this.state = 'clear';
-        this.timer = CLEAR_LO + Math.random() * (CLEAR_HI - CLEAR_LO);
+        this.timer = CALM_LO + Math.random() * (CALM_HI - CALM_LO);
       }
     } else {
       this.state = 'clear';
-      this.timer = CLEAR_LO + Math.random() * (CLEAR_HI - CLEAR_LO);
+      this.timer = CALM_LO + Math.random() * (CALM_HI - CALM_LO);
       game.toast('SKY CLEARING', 'The weather lifts — Palmera Bay dries out.', 4);
     }
   }
