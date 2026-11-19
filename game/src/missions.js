@@ -1,11 +1,11 @@
 // Missions: Marco's thirteen-job story, plus taxi fares, courier runs
 // and hidden cash stashes. A mission is a list of steps; every stage
 // type has one handler, and the manager advances, fails or completes
-// the mission as the steps resolve. v5 rewrote this file wholesale —
-// new internal names, new layout — while keeping every stage, payout,
-// timer and radius exactly as the story was written. One thing stays
-// from v4: a cutscene briefing plays when a job starts, never while a
-// screenshot is being staged.
+// the mission as the steps resolve. v6 rewrote this file wholesale —
+// new internal names, new layout, new briefings — while keeping every
+// stage, payout, timer and radius exactly as the story was written.
+// One thing stays from v4: a cutscene briefing plays when a job
+// starts, never while a screenshot is being staged.
 import { distSq } from './config.js';
 import { CourierRun, makeCourierJob } from './courier.js';
 
@@ -130,18 +130,18 @@ export const STORY = [
 ];
 
 // Where Marco is right now — the car when driving, his feet when not.
-function whereIsMarco(game) {
+function marcoPos(game) {
   const p = game.player;
   if (p.inCar && game.playerCar) return { x: game.playerCar.x, y: game.playerCar.y };
   return { x: p.x, y: p.y };
 }
 
-function within(x, y, target, radius) {
+function inside(x, y, target, radius) {
   return distSq(x, y, target.x, target.y) < radius * radius;
 }
 
 // How many of a named crew are down on the ground right now.
-function crewDownCount(game, crewName) {
+function crewDown(game, crewName) {
   let n = 0;
   for (const m of game.gangs.members) {
     if (m.crew.name === crewName && m.state === 'down') n += 1;
@@ -180,8 +180,8 @@ export class MissionManager {
     if (this.storyDone) return false;
     const job = STORY[this.storyIndex];
     this.active = { def: job, step: 0, timer: 0, holdT: 0, defeatBase: 0 };
-    this._stageMissionProps(job);
-    this.announce(job);
+    this._prepJob(job);
+    this._announceJob(job);
     // A scripted briefing opens over the game — never while a screenshot
     // is being staged (?shot=), or the letterbox would spoil the shot.
     const staging = new URLSearchParams(window.location.search).get('shot');
@@ -192,42 +192,42 @@ export class MissionManager {
   }
 
   // Park the mission's special vehicles and crews before the first stage.
-  _stageMissionProps(job) {
-    const gm = this.game;
+  _prepJob(job) {
+    const game = this.game;
     if (job.id === 'm6' && !this.vanParked) {
-      const spot = gm.city.landmarks.stadium;
-      gm.traffic.spawnVan(spot.x + 60, spot.y + 30);
+      const spot = game.city.landmarks.stadium;
+      game.traffic.spawnVan(spot.x + 60, spot.y + 30);
       this.vanParked = true;
     }
     if (job.id === 'm9' && !this.sharksMustered) {
-      const spot = gm.city.landmarks.stadium;
-      gm.gangs.spawnCrew('Sharks', 6, spot.x, spot.y);
+      const spot = game.city.landmarks.stadium;
+      game.gangs.spawnCrew('Sharks', 6, spot.x, spot.y);
       this.sharksMustered = true;
     }
     if (job.id === 'm10') {
-      const spot = gm.city.landmarks.garage;
-      gm.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
+      const spot = game.city.landmarks.garage;
+      game.traffic.spawnModel('Midnight Van', spot.x + 70, spot.y + 20);
     }
     if (job.id === 'm11') {
       // A fresh race: the win flag from any earlier race does not count.
-      gm.races.won = false;
+      game.races.won = false;
     }
     if (job.id === 'm12' && !this.vipersMustered) {
-      const spot = gm.city.landmarks.docks;
-      gm.gangs.spawnCrew('Vipers', 6, spot.x, spot.y);
+      const spot = game.city.landmarks.docks;
+      game.gangs.spawnCrew('Vipers', 6, spot.x, spot.y);
       this.vipersMustered = true;
     }
     if (job.id === 'm13' && !this.coupeParked) {
-      const spot = gm.city.landmarks.policeHQ;
-      gm.traffic.spawnModel('Coral Coupe', spot.x - 80, spot.y + 40);
+      const spot = game.city.landmarks.policeHQ;
+      game.traffic.spawnModel('Coral Coupe', spot.x - 80, spot.y + 40);
       this.coupeParked = true;
     }
   }
 
-  announce(job) {
-    const gm = this.game;
-    gm.toast(`MISSION: ${job.title}`, job.brief, 6);
-    gm.sounds.pickup();
+  _announceJob(job) {
+    const game = this.game;
+    game.toast(`MISSION: ${job.title}`, job.brief, 6);
+    game.sounds.pickup();
   }
 
   currentStep() {
@@ -242,33 +242,33 @@ export class MissionManager {
   }
 
   fail(reason) {
-    const gm = this.game;
-    gm.toast('MISSION FAILED', reason, 5);
-    gm.sounds.missionFail();
+    const game = this.game;
+    game.toast('MISSION FAILED', reason, 5);
+    game.sounds.missionFail();
     this.active = null;
   }
 
   complete() {
-    const gm = this.game;
+    const game = this.game;
     const job = this.active.def;
-    gm.player.money += job.pay;
-    if (gm.stats) {
-      gm.stats.recordEarned(job.pay);
-      gm.stats.recordJob();
+    game.player.money += job.pay;
+    if (game.stats) {
+      game.stats.recordEarned(job.pay);
+      game.stats.recordJob();
     }
-    gm.sounds.missionDone();
-    gm.sounds.cash();
-    gm.toast('MISSION COMPLETE', `${job.title} — earned $${job.pay}`, 6);
+    game.sounds.missionDone();
+    game.sounds.cash();
+    game.toast('MISSION COMPLETE', `${job.title} — earned $${job.pay}`, 6);
     this.completed += 1;
     this.storyIndex += 1;
     this.active = null;
     if (this.storyDone) {
-      gm.toast(
+      game.toast(
         'PALMERA BAY IS YOURS',
         'Every job done. Marco Solano runs this city now — free roam, fares and stashes remain.',
         9,
       );
-      gm.saveGame();
+      game.saveGame();
     }
   }
 
@@ -282,7 +282,7 @@ export class MissionManager {
     }
     const stage = this.currentStep();
     if (stage.type === 'defeat') {
-      this.active.defeatBase = crewDownCount(this.game, stage.crew);
+      this.active.defeatBase = crewDown(this.game, stage.crew);
     }
     this.game.toast('NEW OBJECTIVE', stage.text, 5);
   }
@@ -321,10 +321,10 @@ export class MissionManager {
   // -- stage handlers ----------------------------------------------------------
 
   onGoto(dt, stage) {
-    const gm = this.game;
-    const pos = whereIsMarco(gm);
-    const target = gm.city.landmarks[stage.place];
-    if (within(pos.x, pos.y, target, stage.radius)) this.nextStep();
+    const game = this.game;
+    const pos = marcoPos(game);
+    const target = game.city.landmarks[stage.place];
+    if (inside(pos.x, pos.y, target, stage.radius)) this.nextStep();
   }
 
   onStealCar() {
@@ -332,13 +332,13 @@ export class MissionManager {
   }
 
   onStealVan() {
-    const gm = this.game;
-    if (gm.player.inCar && gm.playerCar && gm.playerCar.van) this.nextStep();
+    const game = this.game;
+    if (game.player.inCar && game.playerCar && game.playerCar.van) this.nextStep();
   }
 
   onStealModel(dt, stage) {
-    const gm = this.game;
-    if (gm.player.inCar && gm.playerCar && gm.playerCar.model.name === stage.model) this.nextStep();
+    const game = this.game;
+    if (game.player.inCar && game.playerCar && game.playerCar.model.name === stage.model) this.nextStep();
   }
 
   onWanted(dt, stage) {
@@ -346,45 +346,45 @@ export class MissionManager {
   }
 
   onLoseCops() {
-    const gm = this.game;
-    if (gm.wanted === 0 && gm.cops.length === 0 && gm.police.policeCars() === 0) this.nextStep();
+    const game = this.game;
+    if (game.wanted === 0 && game.cops.length === 0 && game.police.policeCars() === 0) this.nextStep();
   }
 
   // Hold inside a ring to crack a target (bank, or the docks warehouse).
   onRob(dt, stage) {
-    const gm = this.game;
-    const pos = whereIsMarco(gm);
-    const site = gm.city.landmarks[stage.place || 'bank'];
-    if (!within(pos.x, pos.y, site, 100)) {
+    const game = this.game;
+    const pos = marcoPos(game);
+    const site = game.city.landmarks[stage.place || 'bank'];
+    if (!inside(pos.x, pos.y, site, 100)) {
       this.active.holdT = 0;
       return;
     }
     this.active.holdT += dt;
     if (this.active.holdT < stage.hold) return;
     const take = stage.place === 'docks' ? 1500 : 800;
-    gm.player.money += take;
-    gm.police.addCrime(
+    game.player.money += take;
+    game.police.addCrime(
       3,
       stage.place === 'docks'
         ? 'Warehouse cracked! $1,500 grabbed — the whole precinct is coming.'
         : 'Bank robbed! $800 grabbed — the whole precinct is coming.',
     );
-    gm.sounds.cash();
+    game.sounds.cash();
     this.nextStep();
   }
 
   onEscape(dt, stage) {
-    const gm = this.game;
-    gm.police.setWanted(Math.max(gm.wanted, stage.stars));
-    if (gm.wanted === 0 && gm.cops.length === 0 && gm.police.policeCars() === 0) this.nextStep();
+    const game = this.game;
+    game.police.setWanted(Math.max(game.wanted, stage.stars));
+    if (game.wanted === 0 && game.cops.length === 0 && game.police.policeCars() === 0) this.nextStep();
   }
 
   // Count how many of the named crew are down since this stage began.
   onDefeat(dt, stage) {
-    const gm = this.game;
-    const dropped = crewDownCount(gm, stage.crew) - this.active.defeatBase;
+    const game = this.game;
+    const dropped = crewDown(game, stage.crew) - this.active.defeatBase;
     if (dropped >= stage.count) {
-      gm.toast('TURF TAKEN', `The ${stage.crew} are down — now get out of there.`, 4);
+      game.toast('TURF TAKEN', `The ${stage.crew} are down — now get out of there.`, 4);
       this.nextStep();
     }
   }
@@ -392,9 +392,9 @@ export class MissionManager {
   // The street-race stage (m11): done the moment a race is won.
   // The race itself lives in races.js; this stage just watches the flag.
   onRace() {
-    const gm = this.game;
-    if (gm.races && gm.races.wonRace) {
-      gm.toast('STREET KING', 'You beat the stadium field — the crown is yours.', 4);
+    const game = this.game;
+    if (game.races && game.races.wonRace) {
+      game.toast('STREET KING', 'You beat the stadium field — the crown is yours.', 4);
       this.nextStep();
     }
   }
@@ -402,55 +402,55 @@ export class MissionManager {
   // -- taxi fares (side activity) ---------------------------------------------
 
   offerTaxi() {
-    const gm = this.game;
+    const game = this.game;
     if (this.taxi || this.active) return false;
-    if (!gm.playerCar || !gm.playerCar.taxi) return false;
-    const spots = Object.values(gm.city.landmarks);
+    if (!game.playerCar || !game.playerCar.taxi) return false;
+    const spots = Object.values(game.city.landmarks);
     const from = spots[Math.floor(Math.random() * spots.length)];
     let to = spots[Math.floor(Math.random() * spots.length)];
     if (to === from) to = spots[(spots.indexOf(from) + 3) % spots.length];
     const pay = 60 + Math.floor(Math.random() * 60);
     this.taxi = { pickup: from, drop: to, stage: 'pickup', pay, timer: 0 };
-    gm.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${pay}.`, 5);
+    game.toast('TAXI FARE', `Passenger waiting near the marker — pick them up, then drop them off. Pays $${pay}.`, 5);
     return true;
   }
 
   updateTaxi(dt) {
-    const gm = this.game;
-    if (!this.taxi || !gm.playerCar) return;
-    const car = gm.playerCar;
+    const game = this.game;
+    if (!this.taxi || !game.playerCar) return;
+    const car = game.playerCar;
     this.taxi.timer += dt;
     if (this.taxi.stage === 'pickup') {
-      if (within(car.x, car.y, this.taxi.pickup, 80)) {
+      if (inside(car.x, car.y, this.taxi.pickup, 80)) {
         this.taxi.stage = 'drop';
-        gm.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
-        gm.sounds.pickup();
+        game.toast('PASSENGER ABOARD', 'Drive them to the drop-off marker.', 4);
+        game.sounds.pickup();
       }
-    } else if (within(car.x, car.y, this.taxi.drop, 80)) {
-      gm.player.money += this.taxi.pay;
-      if (gm.stats) {
-        gm.stats.recordEarned(this.taxi.pay);
-        gm.stats.recordFare();
+    } else if (inside(car.x, car.y, this.taxi.drop, 80)) {
+      game.player.money += this.taxi.pay;
+      if (game.stats) {
+        game.stats.recordEarned(this.taxi.pay);
+        game.stats.recordFare();
       }
-      gm.sounds.cash();
-      gm.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
+      game.sounds.cash();
+      game.toast('FARE PAID', `+$${this.taxi.pay} — nice driving.`, 4);
       this.taxi = null;
     }
     if (this.taxi && this.taxi.timer > 120) {
       this.taxi = null;
-      gm.toast('FARE LOST', 'The passenger gave up waiting.', 4);
+      game.toast('FARE LOST', 'The passenger gave up waiting.', 4);
     }
   }
 
   // -- courier runs (side activity) -------------------------------------------
 
   offerCourier() {
-    const gm = this.game;
+    const game = this.game;
     if (this.courier || this.taxi || this.active) return false;
-    if (!gm.playerCar) return false;
-    const job = makeCourierJob(Math.random, gm.city.landmarks);
+    if (!game.playerCar) return false;
+    const job = makeCourierJob(Math.random, game.city.landmarks);
     this.courier = new CourierRun(job);
-    gm.toast(
+    game.toast(
       'COURIER JOB',
       `Parcel run: collect at ${this.courier.pickupName}, deliver to ${this.courier.dropName} in ${job.timeLimit}s. Pays $${job.pay}.`,
       6,
@@ -459,22 +459,22 @@ export class MissionManager {
   }
 
   updateCourier(dt) {
-    const gm = this.game;
-    if (!this.courier || !gm.playerCar) return;
-    const car = gm.playerCar;
+    const game = this.game;
+    if (!this.courier || !game.playerCar) return;
+    const car = game.playerCar;
     const event = this.courier.update(dt, car.x, car.y);
     if (event === 'picked') {
-      gm.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
-      gm.sounds.pickup();
+      game.toast('PARCEL COLLECTED', `Now deliver it to ${this.courier.dropName} — ${Math.ceil(this.courier.timeLeft)}s left.`, 4);
+      game.sounds.pickup();
     } else if (event === 'delivered') {
       const bonus = this.courier.speedBonus;
-      gm.player.money += this.courier.pay + bonus;
-      if (gm.stats) gm.stats.recordEarned(this.courier.pay + bonus);
-      gm.sounds.cash();
-      gm.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
+      game.player.money += this.courier.pay + bonus;
+      if (game.stats) game.stats.recordEarned(this.courier.pay + bonus);
+      game.sounds.cash();
+      game.toast('DELIVERED', `+$${this.courier.pay}${bonus ? ` + $${bonus} speed bonus` : ''} — right on time.`, 4);
       this.courier = null;
     } else if (event === 'expired') {
-      gm.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
+      game.toast('DELIVERY LATE', 'The parcel run expired — the client went elsewhere.', 4);
       this.courier = null;
     }
   }
@@ -498,21 +498,21 @@ export class MissionManager {
   }
 
   checkPackages() {
-    const gm = this.game;
-    const p = gm.player;
+    const game = this.game;
+    const p = game.player;
     for (const pkg of this.packages) {
       if (pkg.found) continue;
-      if (!within(p.x, p.y, pkg, 40)) continue;
+      if (!inside(p.x, p.y, pkg, 40)) continue;
       pkg.found = true;
       this.packagesFound += 1;
       p.money += 150;
-      if (gm.stats) {
-        gm.stats.recordEarned(150);
-        gm.stats.recordStash();
+      if (game.stats) {
+        game.stats.recordEarned(150);
+        game.stats.recordStash();
       }
-      gm.sounds.cash();
-      gm.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
-      gm.addParticles(pkg.x, pkg.y, 12, '#f2c230');
+      game.sounds.cash();
+      game.toast('CASH STASH', `+$150 — stash ${this.packagesFound}/10 found.`, 4);
+      game.addParticles(pkg.x, pkg.y, 12, '#f2c230');
     }
   }
 }
