@@ -2,7 +2,7 @@
 // dialogue and portraits drawn in code. No image assets anywhere: every
 // face is vector art painted on a small canvas at runtime.
 //
-// v5 rewrote this file end to end: new dialogue, new structure, new
+// v6 rewrote this file end to end: new dialogue, new structure, new
 // internal names. The scenes play exactly as before — same shots, same
 // camera targets, same mission briefings in the same order.
 //
@@ -22,7 +22,7 @@
 // and colour, and one signature feature each.
 // ---------------------------------------------------------------------------
 
-const CAST = {
+const PEOPLE = {
   marco: {
     name: 'Marco',
     role: 'You — fresh off the boat',
@@ -57,9 +57,9 @@ const CAST = {
 
 // Mission briefings, keyed by mission index (0-based). Missions without
 // a scripted briefing fall back to the generic Rico call below.
-const MISSION_SCRIPTS = {
+const BRIEFINGS = {
   0: [
-    { who: 'rico', text: 'First job, kid. You need wheels — take any car off the street and bring it to Solano Garage.' },
+    { who: 'rico', text: 'First job, kid. You need wheels — lift any car off the street and bring it to Solano Garage.' },
     { who: 'marco', text: 'Steal a car. Day one. Some welcome home this is.' },
     { who: 'rico', text: 'Welcome to Palmera Bay. The garage pays for the car — the city charges for everything else.' },
   ],
@@ -110,12 +110,12 @@ const MISSION_SCRIPTS = {
   ],
 };
 
-const DEFAULT_SCRIPT = [
+const FALLBACK_SCRIPT = [
   { who: 'rico', text: 'New job, Marco. The details are on your tracker — do it clean, do it fast.' },
   { who: 'marco', text: 'Clean and fast. My two favourite words.' },
 ];
 
-const OPENING = {
+const INTRO = {
   title: 'PALMERA BAY',
   shots: [
     {
@@ -147,106 +147,106 @@ const OPENING = {
 // Paint a character portrait on a 2D canvas context, centred at (x, y),
 // inside a square of `size` pixels. All vector shapes, no images.
 export function drawPortrait(ctx, id, x, y, size) {
-  const who = CAST[id] || CAST.marco;
-  const unit = size;
+  const person = PEOPLE[id] || PEOPLE.marco;
+  const u = size;
   ctx.save();
   ctx.translate(x, y);
   // Backdrop disc.
   ctx.fillStyle = '#20242e';
   ctx.beginPath();
-  ctx.arc(0, 0, unit / 2, 0, Math.PI * 2);
+  ctx.arc(0, 0, u / 2, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#f5c542';
-  ctx.lineWidth = Math.max(2, unit / 28);
+  ctx.lineWidth = Math.max(2, u / 28);
   ctx.stroke();
   // Shoulders.
   ctx.fillStyle = id === 'lucia' ? '#8e2f5c' : id === 'kane' ? '#1d3a5c' : id === 'vex' ? '#3d1d1d' : '#2e4a2e';
   ctx.beginPath();
-  ctx.ellipse(0, unit * 0.32, unit * 0.34, unit * 0.2, 0, Math.PI, 0);
+  ctx.ellipse(0, u * 0.32, u * 0.34, u * 0.2, 0, Math.PI, 0);
   ctx.fill();
   // Head.
-  ctx.fillStyle = who.skin;
+  ctx.fillStyle = person.skin;
   ctx.beginPath();
-  ctx.arc(0, -unit * 0.05, unit * 0.22, 0, Math.PI * 2);
+  ctx.arc(0, -u * 0.05, u * 0.22, 0, Math.PI * 2);
   ctx.fill();
   // Hair.
-  ctx.fillStyle = who.hair;
-  if (who.hairStyle === 'long') {
+  ctx.fillStyle = person.hair;
+  if (person.hairStyle === 'long') {
     ctx.beginPath();
-    ctx.arc(0, -unit * 0.1, unit * 0.23, Math.PI, 0);
+    ctx.arc(0, -u * 0.1, u * 0.23, Math.PI, 0);
     ctx.fill();
-    ctx.fillRect(-unit * 0.23, -unit * 0.1, unit * 0.09, unit * 0.34);
-    ctx.fillRect(unit * 0.14, -unit * 0.1, unit * 0.09, unit * 0.34);
-  } else if (who.hairStyle === 'mohawk') {
-    ctx.fillRect(-unit * 0.04, -unit * 0.36, unit * 0.08, unit * 0.16);
-    ctx.fillRect(-unit * 0.09, -unit * 0.3, unit * 0.05, unit * 0.1);
-    ctx.fillRect(unit * 0.04, -unit * 0.3, unit * 0.05, unit * 0.1);
-  } else if (who.hairStyle === 'bun') {
+    ctx.fillRect(-u * 0.23, -u * 0.1, u * 0.09, u * 0.34);
+    ctx.fillRect(u * 0.14, -u * 0.1, u * 0.09, u * 0.34);
+  } else if (person.hairStyle === 'mohawk') {
+    ctx.fillRect(-u * 0.04, -u * 0.36, u * 0.08, u * 0.16);
+    ctx.fillRect(-u * 0.09, -u * 0.3, u * 0.05, u * 0.1);
+    ctx.fillRect(u * 0.04, -u * 0.3, u * 0.05, u * 0.1);
+  } else if (person.hairStyle === 'bun') {
     ctx.beginPath();
-    ctx.arc(0, -unit * 0.28, unit * 0.09, 0, Math.PI * 2);
+    ctx.arc(0, -u * 0.28, u * 0.09, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(0, -unit * 0.1, unit * 0.22, Math.PI, 0);
+    ctx.arc(0, -u * 0.1, u * 0.22, Math.PI, 0);
     ctx.fill();
-  } else if (who.hairStyle === 'slick') {
+  } else if (person.hairStyle === 'slick') {
     ctx.beginPath();
-    ctx.ellipse(0, -unit * 0.14, unit * 0.2, unit * 0.1, 0, Math.PI, 0);
+    ctx.ellipse(0, -u * 0.14, u * 0.2, u * 0.1, 0, Math.PI, 0);
     ctx.fill();
-  } else if (who.hairStyle === 'flat') {
-    ctx.fillRect(-unit * 0.2, -unit * 0.28, unit * 0.4, unit * 0.08);
+  } else if (person.hairStyle === 'flat') {
+    ctx.fillRect(-u * 0.2, -u * 0.28, u * 0.4, u * 0.08);
   } else {
     // short
     ctx.beginPath();
-    ctx.arc(0, -unit * 0.11, unit * 0.21, Math.PI * 0.95, Math.PI * 2.05);
+    ctx.arc(0, -u * 0.11, u * 0.21, Math.PI * 0.95, Math.PI * 2.05);
     ctx.fill();
   }
   // Eyes.
   ctx.fillStyle = '#141414';
   ctx.beginPath();
-  ctx.arc(-unit * 0.08, -unit * 0.04, unit * 0.022, 0, Math.PI * 2);
-  ctx.arc(unit * 0.08, -unit * 0.04, unit * 0.022, 0, Math.PI * 2);
+  ctx.arc(-u * 0.08, -u * 0.04, u * 0.022, 0, Math.PI * 2);
+  ctx.arc(u * 0.08, -u * 0.04, u * 0.022, 0, Math.PI * 2);
   ctx.fill();
   // Mouth.
   ctx.strokeStyle = '#5c2e1e';
-  ctx.lineWidth = Math.max(1.5, unit / 40);
+  ctx.lineWidth = Math.max(1.5, u / 40);
   ctx.beginPath();
-  ctx.arc(0, unit * 0.05, unit * 0.07, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.arc(0, u * 0.05, u * 0.07, Math.PI * 0.15, Math.PI * 0.85);
   ctx.stroke();
   // Signature feature.
-  if (who.feature === 'stubble') {
+  if (person.feature === 'stubble') {
     ctx.fillStyle = 'rgba(20,12,8,0.35)';
     ctx.beginPath();
-    ctx.arc(0, unit * 0.08, unit * 0.13, 0, Math.PI);
+    ctx.arc(0, u * 0.08, u * 0.13, 0, Math.PI);
     ctx.fill();
-  } else if (who.feature === 'earring') {
+  } else if (person.feature === 'earring') {
     ctx.fillStyle = '#f5c542';
     ctx.beginPath();
-    ctx.arc(-unit * 0.2, unit * 0.02, unit * 0.025, 0, Math.PI * 2);
+    ctx.arc(-u * 0.2, u * 0.02, u * 0.025, 0, Math.PI * 2);
     ctx.fill();
-  } else if (who.feature === 'scar') {
+  } else if (person.feature === 'scar') {
     ctx.strokeStyle = '#7a2e2e';
-    ctx.lineWidth = Math.max(1.5, unit / 36);
+    ctx.lineWidth = Math.max(1.5, u / 36);
     ctx.beginPath();
-    ctx.moveTo(unit * 0.1, -unit * 0.16);
-    ctx.lineTo(unit * 0.05, unit * 0.02);
+    ctx.moveTo(u * 0.1, -u * 0.16);
+    ctx.lineTo(u * 0.05, u * 0.02);
     ctx.stroke();
-  } else if (who.feature === 'goggles') {
+  } else if (person.feature === 'goggles') {
     ctx.strokeStyle = '#c98d2e';
-    ctx.lineWidth = Math.max(2, unit / 30);
+    ctx.lineWidth = Math.max(2, u / 30);
     ctx.beginPath();
-    ctx.arc(0, -unit * 0.24, unit * 0.1, 0, Math.PI * 2);
+    ctx.arc(0, -u * 0.24, u * 0.1, 0, Math.PI * 2);
     ctx.stroke();
-  } else if (who.feature === 'tattoo') {
+  } else if (person.feature === 'tattoo') {
     ctx.fillStyle = '#1d5c2e';
     ctx.beginPath();
-    ctx.arc(unit * 0.16, unit * 0.08, unit * 0.04, 0, Math.PI * 2);
+    ctx.arc(u * 0.16, u * 0.08, u * 0.04, 0, Math.PI * 2);
     ctx.fill();
-  } else if (who.feature === 'badge') {
+  } else if (person.feature === 'badge') {
     ctx.fillStyle = '#f5c542';
     ctx.beginPath();
-    ctx.moveTo(-unit * 0.18, unit * 0.28);
-    ctx.lineTo(-unit * 0.12, unit * 0.22);
-    ctx.lineTo(-unit * 0.12, unit * 0.34);
+    ctx.moveTo(-u * 0.18, u * 0.28);
+    ctx.lineTo(-u * 0.12, u * 0.22);
+    ctx.lineTo(-u * 0.12, u * 0.34);
     ctx.closePath();
     ctx.fill();
   }
@@ -256,51 +256,51 @@ export function drawPortrait(ctx, id, x, y, size) {
 export class Cutscenes {
   constructor(game) {
     this.game = game;
-    this.active = null; // { shots, shotIndex, lineIndex, charsShown, shotT, done }
+    this.active = null; // { shots, take, cue, shown, takeT, done }
     this.onDone = null;
-    this._buildStage();
-    this._listenKeys();
+    this._makeStage();
+    this._bindKeys();
   }
 
   // -- public ---------------------------------------------------------------
 
   play(sceneId) {
     if (sceneId === 'intro') {
-      this._begin(OPENING.shots, OPENING.title, null);
+      this._start(INTRO.shots, INTRO.title, null);
     }
   }
 
   playBriefing(missionIndex) {
-    const lines = MISSION_SCRIPTS[missionIndex] || DEFAULT_SCRIPT;
+    const lines = BRIEFINGS[missionIndex] || FALLBACK_SCRIPT;
     const shots = [{ cam: null, dur: 3.5, lines }];
-    this._begin(shots, null, null);
+    this._start(shots, null, null);
   }
 
   advance() {
     if (!this.active) return;
-    const cue = this._lineNow();
-    if (this.active.charsShown < cue.text.length) {
+    const cue = this._cueNow();
+    if (this.active.shown < cue.text.length) {
       // First press: reveal the whole cue at once.
-      this.active.charsShown = cue.text.length;
-      this.boxText.textContent = cue.text;
+      this.active.shown = cue.text.length;
+      this.textEl.textContent = cue.text;
       return;
     }
-    const take = this._shotNow();
-    this.active.lineIndex += 1;
-    this.active.charsShown = 0;
-    if (this.active.lineIndex >= take.lines.length) {
-      this.active.shotIndex += 1;
-      this.active.lineIndex = 0;
-      if (this.active.shotIndex >= this.active.shots.length) {
-        this._finish();
+    const take = this._takeNow();
+    this.active.cue += 1;
+    this.active.shown = 0;
+    if (this.active.cue >= take.lines.length) {
+      this.active.take += 1;
+      this.active.cue = 0;
+      if (this.active.take >= this.active.shots.length) {
+        this._end();
         return;
       }
     }
-    this._paintLine();
+    this._showLine();
   }
 
   skip() {
-    if (this.active) this._finish();
+    if (this.active) this._end();
   }
 
   isPlaying() {
@@ -309,18 +309,18 @@ export class Cutscenes {
 
   update(dt) {
     if (!this.active) return;
-    const take = this._shotNow();
-    const cue = this._lineNow();
+    const take = this._takeNow();
+    const cue = this._cueNow();
     // Typewriter: 45 characters a second.
-    if (this.active.charsShown < cue.text.length) {
-      this.active.charsShown = Math.min(
+    if (this.active.shown < cue.text.length) {
+      this.active.shown = Math.min(
         cue.text.length,
-        this.active.charsShown + dt * 45,
+        this.active.shown + dt * 45,
       );
-      this.boxText.textContent = cue.text.slice(0, Math.floor(this.active.charsShown));
+      this.textEl.textContent = cue.text.slice(0, Math.floor(this.active.shown));
     }
-    // Camera: drift toward the take'unit target while the take lasts.
-    this.active.shotT += dt;
+    // Camera: drift toward the take's target while the take lasts.
+    this.active.takeT += dt;
     const cam = take.cam;
     const renderer = this.game.renderer;
     if (cam && renderer && renderer.cam) {
@@ -329,7 +329,7 @@ export class Cutscenes {
       renderer.cam.y += (cam.y - 400 - renderer.cam.y) * k;
     }
     // Auto-advance a take whose lines are all shown and whose time is up.
-    if (this.active.shotT > take.dur + take.lines.length * 2.5) {
+    if (this.active.takeT > take.dur + take.lines.length * 2.5) {
       this.advance();
     }
   }
@@ -352,14 +352,14 @@ export class Cutscenes {
 
   // -- internals ------------------------------------------------------------
 
-  _buildStage() {
+  _makeStage() {
     // Letterbox bars.
-    this.barTop = document.createElement('div');
-    this.barTop.style.cssText = 'position:fixed;left:0;right:0;top:0;height:0;background:#000;z-index:60;transition:height .3s;';
-    this.barBottom = document.createElement('div');
-    this.barBottom.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:0;background:#000;z-index:60;transition:height .3s;';
-    document.body.appendChild(this.barTop);
-    document.body.appendChild(this.barBottom);
+    this.topBar = document.createElement('div');
+    this.topBar.style.cssText = 'position:fixed;left:0;right:0;top:0;height:0;background:#000;z-index:60;transition:height .3s;';
+    this.bottomBar = document.createElement('div');
+    this.bottomBar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:0;background:#000;z-index:60;transition:height .3s;';
+    document.body.appendChild(this.topBar);
+    document.body.appendChild(this.bottomBar);
     // Dialogue box.
     this.box = document.createElement('div');
     this.box.style.cssText =
@@ -370,67 +370,67 @@ export class Cutscenes {
     this.box.innerHTML =
       '<canvas width="72" height="72" style="position:absolute;left:10px;top:10px;border-radius:50%"></canvas>' +
       '<div class="cs-name" style="color:#f5c542;font-weight:700;font-size:13px;letter-spacing:1px"></div>' +
-      '<div class="cs-text" style="font-size:14px;cue-height:1.5;margin-top:4px"></div>' +
+      '<div class="cs-text" style="font-size:14px;line-height:1.5;margin-top:4px"></div>' +
       '<div class="cs-hint" style="font-size:11px;opacity:.55;text-align:right;margin-top:4px">E / click — continue</div>';
     this.box.addEventListener('click', () => this.advance());
     document.body.appendChild(this.box);
-    this.boxName = this.box.querySelector('.cs-name');
-    this.boxText = this.box.querySelector('.cs-text');
-    this.boxCanvas = this.box.querySelector('canvas');
+    this.nameEl = this.box.querySelector('.cs-name');
+    this.textEl = this.box.querySelector('.cs-text');
+    this.faceCanvas = this.box.querySelector('canvas');
   }
 
-  _listenKeys() {
+  _bindKeys() {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       if (e.code === 'KeyE' && this.active) this.advance();
     });
   }
 
-  _begin(shots, title, done) {
+  _start(shots, title, done) {
     this.active = {
       shots,
-      shotIndex: 0,
-      lineIndex: 0,
-      charsShown: 0,
-      shotT: 0,
+      take: 0,
+      cue: 0,
+      shown: 0,
+      takeT: 0,
       title,
-      camFrom: null,
+      fromCam: null,
     };
     this.onDone = done;
     this.game.cutsceneActive = true;
-    this.barTop.style.height = '56px';
-    this.barBottom.style.height = '56px';
+    this.topBar.style.height = '56px';
+    this.bottomBar.style.height = '56px';
     this.box.style.display = 'block';
-    this._paintLine();
+    this._showLine();
   }
 
-  _shotNow() {
-    return this.active.shots[this.active.shotIndex];
+  _takeNow() {
+    return this.active.shots[this.active.take];
   }
 
-  _lineNow() {
-    const take = this._shotNow();
-    return take.lines[this.active.lineIndex];
+  _cueNow() {
+    const take = this._takeNow();
+    return take.lines[this.active.cue];
   }
 
-  _paintLine() {
-    const cue = this._lineNow();
-    const ch = CAST[cue.who] || CAST.marco;
-    this.boxName.textContent = `${ch.name} — ${ch.role}`;
-    this.boxText.textContent = '';
-    this.active.charsShown = 0;
-    const ctx = this.boxCanvas.getContext('2d');
+  _showLine() {
+    const cue = this._cueNow();
+    const ch = PEOPLE[cue.who] || PEOPLE.marco;
+    this.nameEl.textContent = `${ch.name} — ${ch.role}`;
+    this.textEl.textContent = '';
+    this.active.shown = 0;
+    const ctx = this.faceCanvas.getContext('2d');
     ctx.clearRect(0, 0, 72, 72);
     drawPortrait(ctx, cue.who, 36, 38, 68);
   }
 
-  _finish() {
+  _end() {
     const done = this.onDone;
     this.active = null;
     this.onDone = null;
     this.game.cutsceneActive = false;
-    this.barTop.style.height = '0';
-    this.barBottom.style.height = '0';
+    this.topBar.style.height = '0';
+    this.bottomBar.style.height = '0';
     this.box.style.display = 'none';
     if (typeof done === 'function') done();
   }
