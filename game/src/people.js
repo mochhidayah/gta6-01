@@ -2,7 +2,7 @@
 // State machine — stroll, chat, flee, down — in five kinds: walkers,
 // joggers, loiterers, vendors at a food stall, taxi drivers by the
 // kerb. Vendors never move: walk up, press E, snack $15, +25 HP.
-// v5 touched this file lightly: same people, same behaviour,
+// v6 touched this file lightly: same people, same behaviour,
 // a few internal names refreshed.
 import { PLAYER_STATS, PED_NAMES, SHORE, SNACK, clamp, distSq } from './config.js';
 import { AVENUES, STREETS } from './city.js';
@@ -10,8 +10,8 @@ import { seeded, choose, between } from './rng.js';
 
 let nextId = 1;
 
-const SHIRTS = ['#d94f70', '#4f7fd9', '#e8b23f', '#58a86b', '#9a5fd0', '#d97b4f'];
-const SKINS = ['#f0c8a0', '#c98d5f', '#8a5a3b', '#f5d7b0'];
+const TOP_COLORS = ['#d94f70', '#4f7fd9', '#e8b23f', '#58a86b', '#9a5fd0', '#d97b4f'];
+const SKIN_TONES = ['#f0c8a0', '#c98d5f', '#8a5a3b', '#f5d7b0'];
 
 // Fixed stalls: one on the Marina strip, one outside Club Flamingo.
 export const VENDOR_SPOTS = [
@@ -19,22 +19,22 @@ export const VENDOR_SPOTS = [
   { x: 2100, y: 700, angle: Math.PI / 2 },
 ];
 
-function shortestArc(delta) {
+function wrapDelta(delta) {
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
   return delta;
 }
 
-function readMoveDir(keys) {
-  let mx = 0;
-  let my = 0;
-  if (keys.KeyW || keys.ArrowUp) my -= 1;
-  if (keys.KeyS || keys.ArrowDown) my += 1;
-  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-  if (keys.KeyD || keys.ArrowRight) mx += 1;
-  const mag = Math.hypot(mx, my);
-  if (mag === 0) return null;
-  return { x: mx / mag, y: my / mag };
+function readInputDir(keys) {
+  let ix = 0;
+  let iy = 0;
+  if (keys.KeyW || keys.ArrowUp) iy -= 1;
+  if (keys.KeyS || keys.ArrowDown) iy += 1;
+  if (keys.KeyA || keys.ArrowLeft) ix -= 1;
+  if (keys.KeyD || keys.ArrowRight) ix += 1;
+  const len = Math.hypot(ix, iy);
+  if (len === 0) return null;
+  return { x: ix / len, y: iy / len };
 }
 
 export class Ped {
@@ -44,8 +44,8 @@ export class Ped {
     this.y = y;
     this.kind = kind; // walker | jogger | loiterer | vendor | taxiDriver | tourist
     this.name = choose(rng, PED_NAMES);
-    this.color = SHIRTS[Math.floor(rng() * SHIRTS.length)];
-    this.skin = SKINS[Math.floor(rng() * SKINS.length)];
+    this.color = TOP_COLORS[Math.floor(rng() * TOP_COLORS.length)];
+    this.skin = SKIN_TONES[Math.floor(rng() * SKIN_TONES.length)];
     this.angle = rng() * Math.PI * 2;
     this.speed = kind === 'jogger' ? between(rng, 110, 150) : between(rng, 35, 70);
     this.state = 'stroll'; // stroll | chat | flee | down
@@ -59,7 +59,7 @@ export class Ped {
   }
 
   // Destination by kind: joggers the beach, loiterers nearby, walkers the city.
-  pickDestination(rng) {
+  chooseSpot(rng) {
     if (this.kind === 'jogger') {
       this.target = {
         x: between(rng, 120, 3400),
@@ -117,7 +117,7 @@ export class Ped {
     // A tourist pauses at every sight to take a photo, then drifts on.
     if (this.kind === 'tourist' && this.idleTimer > 0) {
       this.idleTimer -= dt;
-      if (this.idleTimer <= 0) this.pickDestination(rng);
+      if (this.idleTimer <= 0) this.chooseSpot(rng);
       return;
     }
     if (this.state === 'chat') {
@@ -141,15 +141,15 @@ export class Ped {
     }
     if (this.kind === 'loiterer' && this.idleTimer > 0) {
       this.idleTimer -= dt;
-      if (this.idleTimer <= 0) this.pickDestination(rng);
+      if (this.idleTimer <= 0) this.chooseSpot(rng);
       return;
     }
-    if (!this.target) this.pickDestination(rng);
-    this.stepTowardTarget(dt, game);
+    if (!this.target) this.chooseSpot(rng);
+    this.stepToTarget(dt, game);
   }
 
   // Step toward the target, turning smoothly, sliding out of buildings.
-  stepTowardTarget(dt, game) {
+  stepToTarget(dt, game) {
     const dx = this.target.x - this.x;
     const dy = this.target.y - this.y;
     const gap = Math.hypot(dx, dy);
@@ -160,9 +160,9 @@ export class Ped {
       if (this.kind === 'tourist') this.idleTimer = between(Math.random, 2, 5);
       return true;
     }
-    const aim = Math.atan2(dy, dx);
-    const spin = this.state === 'flee' ? 4 : 3;
-    this.angle += clamp(shortestArc(aim - this.angle), -spin * dt, spin * dt);
+    const heading = Math.atan2(dy, dx);
+    const turn = this.state === 'flee' ? 4 : 3;
+    this.angle += clamp(wrapDelta(heading - this.angle), -turn * dt, turn * dt);
     const pace = this.state === 'flee' ? this.speed * 2.4 : this.speed;
     this.x += Math.cos(this.angle) * pace * dt;
     this.y += Math.sin(this.angle) * pace * dt;
@@ -178,13 +178,13 @@ export class Ped {
     if (this.kind !== 'walker' || other.kind !== 'walker') return false;
     if (this.state !== 'stroll' || other.state !== 'stroll') return false;
     if (rng() > 0.35) return false;
-    const secs = between(rng, 3, 7);
+    const seconds = between(rng, 3, 7);
     this.state = 'chat';
-    this.chatTimer = secs;
+    this.chatTimer = seconds;
     this.chatPartner = other;
     this.target = null;
     other.state = 'chat';
-    other.chatTimer = secs;
+    other.chatTimer = seconds;
     other.chatPartner = this;
     other.target = null;
     return true;
@@ -229,18 +229,18 @@ export class Player {
   }
 
   move(keys, dt, game) {
-    const vec = readMoveDir(keys);
-    if (vec) {
+    const dir = readInputDir(keys);
+    if (dir) {
       this.sprint = !!(keys.ShiftLeft || keys.ShiftRight);
-      const speed = this.sprint ? PLAYER_STATS.sprint : PLAYER_STATS.walk;
-      this.vx = vec.x * speed;
-      this.vy = vec.y * speed;
-      this.angle = Math.atan2(vec.y, vec.x);
+      const pace = this.sprint ? PLAYER_STATS.sprint : PLAYER_STATS.walk;
+      this.vx = dir.x * pace;
+      this.vy = dir.y * pace;
+      this.angle = Math.atan2(dir.y, dir.x);
     } else {
       // Friction: coast to a stop.
-      const damp = Math.max(0, 1 - 10 * dt);
-      this.vx *= damp;
-      this.vy *= damp;
+      const friction = Math.max(0, 1 - 10 * dt);
+      this.vx *= friction;
+      this.vy *= friction;
     }
     this.x += this.vx * dt;
     this.y += this.vy * dt;
@@ -264,12 +264,12 @@ export class Player {
     if (this.punchCooldown > 0) return false;
     this.punchCooldown = 0.35;
     game.sounds.punch();
-    const fx = this.x + Math.cos(this.angle) * 26;
-    const fy = this.y + Math.sin(this.angle) * 26;
+    const tx = this.x + Math.cos(this.angle) * 26;
+    const ty = this.y + Math.sin(this.angle) * 26;
     let landed = false;
     for (const ped of game.crowd.peds) {
       if (ped.state === 'down') continue;
-      if (distSq(fx, fy, ped.x, ped.y) < 30 * 30) {
+      if (distSq(tx, ty, ped.x, ped.y) < 30 * 30) {
         ped.knockDown();
         game.addCrime(1, 'You knocked out a pedestrian!');
         game.addParticles(ped.x, ped.y, 8, '#ffd23f');
@@ -279,7 +279,7 @@ export class Player {
     }
     for (const cop of game.cops) {
       if (cop.state === 'down') continue;
-      if (distSq(fx, fy, cop.x, cop.y) < 30 * 30) {
+      if (distSq(tx, ty, cop.x, cop.y) < 30 * 30) {
         cop.knockDown();
         game.addCrime(2, 'You floored a cop! The precinct will hear about this.');
         landed = true;
@@ -287,7 +287,7 @@ export class Player {
     }
     for (const member of game.gangs.members) {
       if (member.state === 'down') continue;
-      if (distSq(fx, fy, member.x, member.y) < 30 * 30) {
+      if (distSq(tx, ty, member.x, member.y) < 30 * 30) {
         member.knockDown();
         game.addCrime(1, `You dropped a ${member.crew.name}! Their crew saw that.`);
         game.addParticles(member.x, member.y, 8, '#ffd23f');
@@ -305,29 +305,29 @@ export class Player {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     let best = null;
-    let bestLen = rangePx;
-    const probe = (ox, oy, r, obj) => {
+    let bestDist = rangePx;
+    const scan = (ox, oy, r, obj) => {
       const dx = ox - x;
       const dy = oy - y;
-      const along = dx * cos + dy * sin;
-      if (along < 0 || along > bestLen) return;
-      const perp = Math.abs(-dx * sin + dy * cos);
-      if (perp < r + 6) {
-        bestLen = along;
+      const depth = dx * cos + dy * sin;
+      if (depth < 0 || depth > bestDist) return;
+      const side = Math.abs(-dx * sin + dy * cos);
+      if (side < r + 6) {
+        bestDist = depth;
         best = obj;
       }
     };
     for (const ped of game.crowd.peds) {
-      if (ped.state !== 'down') probe(ped.x, ped.y, ped.r, { kind: 'ped', ped });
+      if (ped.state !== 'down') scan(ped.x, ped.y, ped.r, { kind: 'ped', ped });
     }
     for (const cop of game.cops) {
-      if (cop.state !== 'down') probe(cop.x, cop.y, cop.r, { kind: 'cop', cop });
+      if (cop.state !== 'down') scan(cop.x, cop.y, cop.r, { kind: 'cop', cop });
     }
     for (const member of game.gangs.members) {
-      if (member.state !== 'down') probe(member.x, member.y, member.r, { kind: 'gang', member });
+      if (member.state !== 'down') scan(member.x, member.y, member.r, { kind: 'gang', member });
     }
     for (const car of game.traffic.cars) {
-      if (!car.dead) probe(car.x, car.y, 24, { kind: 'car', car });
+      if (!car.dead) scan(car.x, car.y, 24, { kind: 'car', car });
     }
     return best;
   }
@@ -339,11 +339,11 @@ export class Player {
     this.aimAt(wx, wy);
     game.sounds.gunshot();
     game.addMuzzle(this.x + Math.cos(this.angle) * 20, this.y + Math.sin(this.angle) * 20, this.angle);
-    const rangePx = 520;
-    const endX = this.x + Math.cos(this.angle) * rangePx;
-    const endY = this.y + Math.sin(this.angle) * rangePx;
-    game.addTracer(this.x, this.y, endX, endY);
-    const hit = this.firstOnRay(game, this.x, this.y, this.angle, rangePx);
+    const range = 520;
+    const tipX = this.x + Math.cos(this.angle) * range;
+    const tipY = this.y + Math.sin(this.angle) * range;
+    game.addTracer(this.x, this.y, tipX, tipY);
+    const hit = this.firstOnRay(game, this.x, this.y, this.angle, range);
     if (hit) {
       if (hit.kind === 'ped') {
         hit.ped.knockDown();
@@ -416,16 +416,16 @@ export class Crowd {
 
   spawn(count, nearX, nearY) {
     for (let i = 0; i < count; i++) {
-      const dice = this.rng();
+      const roll = this.rng();
       const x = nearX + (this.rng() - 0.5) * 1500;
       const y = nearY + (this.rng() - 0.5) * 1100;
-      if (dice < 0.15) {
+      if (roll < 0.15) {
         this.peds.push(new Ped(between(this.rng, 200, 3400), SHORE.sandY + between(this.rng, 25, 110), this.rng, 'jogger'));
-      } else if (dice < 0.3) {
-        const spots = Object.values(this.city.landmarks);
-        const spot = spots[Math.floor(this.rng() * spots.length)];
-        this.peds.push(new Ped(spot.x + between(this.rng, -90, 90), spot.y + between(this.rng, -90, 90), this.rng, 'loiterer'));
-      } else if (dice < 0.42) {
+      } else if (roll < 0.3) {
+        const places = Object.values(this.city.landmarks);
+        const place = places[Math.floor(this.rng() * places.length)];
+        this.peds.push(new Ped(place.x + between(this.rng, -90, 90), place.y + between(this.rng, -90, 90), this.rng, 'loiterer'));
+      } else if (roll < 0.42) {
         // Tourists with cameras, drifting between the sights.
         this.peds.push(new Ped(between(this.rng, 200, 3400), between(this.rng, 200, 2200), this.rng, 'tourist'));
       } else {
@@ -467,13 +467,13 @@ export class Crowd {
   update(dt, game) {
     for (const ped of this.peds) ped.update(dt, game, this.rng);
     this.pairChatters();
-    const hx = game.player.x;
-    const hy = game.player.y;
+    const px = game.player.x;
+    const py = game.player.y;
     this.peds = this.peds.filter((ped) => {
       // Vendors and taxi drivers are fixtures: they never despawn.
       if (ped.kind === 'vendor' || ped.kind === 'taxiDriver') return true;
       const limit = ped.state === 'down' ? 900 : 1300;
-      return distSq(ped.x, ped.y, hx, hy) < limit * limit;
+      return distSq(ped.x, ped.y, px, py) < limit * limit;
     });
   }
 
@@ -481,10 +481,10 @@ export class Crowd {
     const walkers = this.peds.filter((ped) => ped.state === 'stroll' && ped.kind === 'walker');
     for (let i = 0; i < walkers.length; i++) {
       for (let j = i + 1; j < walkers.length; j++) {
-        const first = walkers[i];
-        const second = walkers[j];
-        if (first.state !== 'stroll' || second.state !== 'stroll') continue;
-        if (distSq(first.x, first.y, second.x, second.y) < 40 * 40) first.tryChat(second, this.rng);
+        const a = walkers[i];
+        const b = walkers[j];
+        if (a.state !== 'stroll' || b.state !== 'stroll') continue;
+        if (distSq(a.x, a.y, b.x, b.y) < 40 * 40) a.tryChat(b, this.rng);
       }
     }
   }
